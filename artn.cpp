@@ -20,6 +20,7 @@
 #include "error.h"
 #include "stdlib.h"
 #include "minimize.h"
+#include "artn.h"
 
 using namespace LAMMPS_NS;
 
@@ -36,7 +37,7 @@ extern "C"{
 
 #define EPS_ENERGY 1.0e-8
 #define INITIAL_STEPSIZE 0.02
-#define SEED 998
+#define SEED 998		// random seed
 #define LOCAL_NUM 20
 #define SADDLE_NUM 50
 #define INCREMENT 0.01
@@ -50,7 +51,18 @@ Artn::Artn(LAMMPS *lmp):Min_linesearch(lmp){
   random = new RanPark(lmp, SEED)
 }
 
-Artn::~Artn(){}
+/*---------------------------------------------------
+  	destructor
+---------------------------------------------------*/
+Artn::~Artn(){
+  if(initial_direction) delete []initial_direction;
+  if(random) delete random;
+  if(fperp) delete []fperp;
+  if(eigenvector) delete []eigenvector;
+  if(prefperp) delete []prefperp;
+  if(prexvec) delete []prexvec;
+  if(prefvec) delete []prefvec;
+}
 
 /*--------------------------------------------------- 
 	setup before artn search
@@ -133,7 +145,7 @@ void Artn::search(){
   // main event loop.
   for( ievent = 0; ievent < maxevent; ievent++){
     // print the current event.
-    print_newevent(ievent, temperature);
+    print_newevent();
     // find one saddle point
     while(find_saddle()){};
     if(!newevent) { ievent--; continue;}
@@ -143,6 +155,12 @@ void Artn::search(){
     // accept or reject the move based on Boltzman weight
     judgement();
   }
+}
+
+/*---------------------------------------------------
+  	print the current event
+---------------------------------------------------*/
+void Artn::print_newevent(){
 }
 
 /*--------------------------------------------------- 
