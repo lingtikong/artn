@@ -25,9 +25,13 @@ class Artn: public MinLineSearch{
     int ievent;
     int nstep;
     double temperature;
+    double prewell_energy;
     bool newevent;
     int maxevent;
     double *initial_direction;
+    double *direction;
+    double *pre_direction;
+    double *prewell_x;
 
     void modify_params(int, char **);
     void command(int, char **);
@@ -36,6 +40,7 @@ class Artn: public MinLineSearch{
 
   protected:
     double *fperp;
+    double *fpar;
     double *eigenvector;
     double eigenvalue;
     double *prefperp;
@@ -43,7 +48,7 @@ class Artn: public MinLineSearch{
     double *prefvec;
     double preenergy;
     double step;
-    void lanczos(double **);
+    void lanczos();
     void findsaddle();
     void output();
     void local_move();
