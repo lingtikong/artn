@@ -7,7 +7,6 @@
   extra global dof.
 ----------------------------------------------------*/
 #include "lmptype.h"
-#include "stdlib.h"
 #include "minimize.h"
 #include "mpi.h"
 #include "math.h"
@@ -144,10 +143,10 @@ int ARTn::search(int maxevent)
 {
   mysetup();
   myinit();
-  if(me == 0)out_log << "Start to minimize the configuration before try to find the saddle point."<<endl;
+  if (me == 0)out_log << "Start to minimize the configuration before try to find the saddle point."<<endl;
   stop_condition = min_converge(max_converge_steps);
   stopstr = stopstrings(stop_condition);
-  if(me == 0){
+  if (me == 0){
     out_log << "- Minimize stop condition: "<< stopstr<< endl;
     out_log << "- Current energy (reference energy): " << ecurrent << endl;
     out_log << "- Temperature: "<< temperature <<endl;
@@ -157,9 +156,9 @@ int ARTn::search(int maxevent)
   config_file = strm.str();
   store_config(config_file);
   config_file.clear();
-  if(me == 0)out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
-  for(int ievent = 0; ievent < maxevent; ievent++){
-    while(!find_saddle());
+  if (me == 0)out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
+  for (int ievent = 0; ievent < maxevent; ievent++){
+    while (!find_saddle());
     ostringstream strm(config_file);
     strm << "sad"<<file_counter;
     config_file = strm.str();
@@ -169,7 +168,8 @@ int ARTn::search(int maxevent)
     downhill();
     judgement();
   }
-  return 1;
+
+return 1;
 }
 
 /* -----------------------------------------------------------------------------
@@ -177,16 +177,15 @@ int ARTn::search(int maxevent)
  * ---------------------------------------------------------------------------*/
 void ARTn::downhill()
 {
-  for(int i = 0; i < nvec; ++i){
-    xvec[i] = (xvec[i] - x0[i]) * prefactor_push_over_saddle;
-  }
+  for(int i = 0; i < nvec; ++i) xvec[i] = (xvec[i] - x0[i]) * prefactor_push_over_saddle;
 
-  if(me == 0)out_log << "Start to minimize the configuration to reach another minimal."<<endl;
+
+  if (me == 0) out_log << "Start to minimize the configuration to reach another minimal."<<endl;
   stop_condition = min_converge(max_converge_steps);
   stopstr = stopstrings(stop_condition);
   eref = ecurrent;
 
-  if(me == 0){
+  if (me == 0){
     out_log << "- Minimize stop condition: "<< stopstr<< endl;
     out_log << "- Current energy : " << ecurrent << endl;
     out_log << "- Temperature: "<< temperature <<endl;
@@ -197,7 +196,7 @@ void ARTn::downhill()
   config_file = strm.str();
   store_config(config_file);
   config_file.clear();
-  if(me == 0) out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
+  if (me == 0) out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
 
 }
 
@@ -207,15 +206,14 @@ void ARTn::downhill()
 void ARTn::judgement()
 {
   // KLT: do not use numbers, I believe you mean exp((eref-ecurrent)/temperature)?
-  if(ecurrent < eref || random->uniform() < pow(2.71828, (eref - ecurrent)/temperature)){
+  if (ecurrent < eref || random->uniform() < exp(eref - ecurrent)/temperature){
     eref = ecurrent;
-    for(int i =0; i < nvec; ++i){
-      x0[i] = xvec[i];
-    }
+    for (int i =0; i < nvec; ++i) x0[i] = xvec[i];
+
     out_log << "Accept this new configuration."<<endl;
     out_event_list << "accept" << endl;
 
-  }else {
+  } else {
 
     for(int i = 0; i < nvec; ++i){
       xvec[i] = x0[i];
@@ -268,7 +266,6 @@ void ARTn::mysetup()
   event_list_file = "events.list";
   log_file = "log.file";
   file_counter = 1000;
-
 }
 
 /* -----------------------------------------------------------------------------
@@ -278,9 +275,9 @@ void ARTn::myinit()
 {
   me =  MPI_Comm_rank(world,&me);
   out_event_list.open(event_list_file.c_str());
-  if(!out_event_list) error->all(FLERR, "Open event list file error!");
+  if (!out_event_list) error->all(FLERR, "Open event list file error!");
   out_log.open(log_file.c_str());
-  if(!out_log) error->all(FLERR, "open event log file error!");
+  if (!out_log) error->all(FLERR, "open event log file error!");
   random = new RanPark(lmp, 12340);
   evalf = 0;
 
@@ -317,7 +314,7 @@ int ARTn::find_saddle()
   double tmp;
   int m_perp = 0, trial = 0, nfail = 0;
 
-  for(int i = 0; i < nvec; i++) x0[i] = xvec[i];
+  for (int i = 0; i < nvec; i++) x0[i] = xvec[i];
   global_random_move();
   ecurrent = energy_force(0);
 
@@ -405,7 +402,7 @@ int ARTn::find_saddle()
     for (int i =0; i < nvec; ++i) tmpsum += eigenvector[i] * fvec[i];
 
     MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
-    if(tmpsumall < 0){
+    if (tmpsumall < 0){
       for(int i = 0; i < nvec; ++i) h[i] = -eigenvector[i];
     }
     for(int i = 0; i <nvec; ++i) sum += h[i] * h_old[i];
@@ -618,8 +615,7 @@ int ARTn::min_converge(int maxiter)
     // not downhill
 
     dot[0] = 0.0;
-    for (i = 0; i < nvec; i++)
-      dot[0] += g[i]*h[i];
+    for (i = 0; i < nvec; i++) dot[0] += g[i]*h[i];
     MPI_Allreduce(dot,dotall,1,MPI_DOUBLE,MPI_SUM,world);
 
     if (dotall[0] <= 0.0) {
@@ -760,9 +756,8 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec)
       if (flag > 0) lanc[n-1][i] = r0[i];
     }
 
-    for (int i=0; i<nvec; i++){
-      xvec[i] = x0tmp[i] + r0[i] * DEL_LANCZOS;
-    }
+    for (int i=0; i<nvec; i++) xvec[i] = x0tmp[i] + r0[i] * DEL_LANCZOS;
+
     myenergy_force();
     ++evalf;
     reset_coords();
@@ -805,8 +800,8 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec)
       if (flag > 0){
         for (int i=0; i < nvec; i++) eigenvector[i] = 0.;
         for (int i=0; i<nvec; i++){
-	       for (int j=0; j<n; j++) eigenvector[i] += z[j]*lanc[j][i];
-	     }
+          for (int j=0; j<n; j++) eigenvector[i] += z[j]*lanc[j][i];
+        }
 
         // normalize eigenvector.
         double sum = 0., sumall;
