@@ -15,8 +15,18 @@ CommandStyle(artn,ARTn)
 #include <string>
 #include <sstream>
 #include "random_park.h"
+#include "dump_atom.h"
 using namespace std;
 namespace LAMMPS_NS{
+class ARTn_dump: public DumpAtom{
+  public:
+    ARTn_dump(LAMMPS *lmp, int narg, char**arg):DumpAtom(lmp, narg, arg){};
+    void modify_file(string file){
+      fclose(fp);
+      fp = fopen(file.c_str(),"w");
+    };
+};
+
 class ARTn: public MinLineSearch{
 public:
     ARTn(class LAMMPS *);
@@ -40,6 +50,7 @@ private:
     void reset_coords();
     double myenergy_force();
     void lanczos(bool , int , int);
+    ARTn_dump * mydump;
 
     int me;
     int vec_count;
