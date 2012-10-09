@@ -3,7 +3,7 @@
 ---------------------------------------------------*/
 #ifdef COMMAND_CLASS
 
-CommandStyle(artn,Artn)
+CommandStyle(artn,ARTn)
 
 #else
 
@@ -17,13 +17,14 @@ CommandStyle(artn,Artn)
 #include "random_park.h"
 using namespace std;
 namespace LAMMPS_NS{
-class Artn: public MinLineSearch{
-  public:
-    Artn(class LAMMPS *);
-    ~Artn();
+class ARTn: public MinLineSearch{
+public:
+    ARTn(class LAMMPS *);
+    ~ARTn();
     int search(int );
     void command(int, char **);
-  private:
+
+private:
     void mysetup();
     void myinit();
     int iterate(int );
@@ -49,6 +50,7 @@ class Artn: public MinLineSearch{
     double *eigenvector;
     double *x0tmp;
     double *h_old;
+
     RanPark *random;
 
     int max_converge_steps;
