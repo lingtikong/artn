@@ -68,9 +68,16 @@ enum{MAXITER,MAXEVAL,ETOL,FTOL,DOWNHILL,ZEROALPHA,ZEROFORCE,ZEROQUAD};
 /* -----------------------------------------------------------------------------
  * Constructor of ARTn
  * ---------------------------------------------------------------------------*/
-ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp)
-{
-  //mylmp = lmp;
+ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp){
+  char **tmp;
+  memory->create(tmp, 5, 10, "Artn string");
+  tmp[0] = "ARTn";
+  tmp[1] = "all";
+  tmp[2] = "atom";
+  tmp[3] = "1";
+  tmp[4] = "min1000";
+  mydump = new ARTn_dump(lmp, 5, tmp);
+  memory->destroy(tmp);
 }
 
 /* -----------------------------------------------------------------------------
@@ -81,6 +88,7 @@ ARTn::~ARTn()
   out_log.close();
   out_event_list.close();
   delete random;
+  delete mydump;
 }
 
 /* -----------------------------------------------------------------------------
@@ -107,6 +115,7 @@ void ARTn::command(int narg, char ** arg)
   if (update->laststep < 0 || update->laststep > MAXBIGINT) error->all(FLERR,"Too many iterations");
 
   lmp->init();
+  mydump->init();
   init();
   update->minimize->setup();
   setup();
@@ -201,7 +210,7 @@ void ARTn::downhill()
 }
 
 /* -----------------------------------------------------------------------------
- * 
+ * decide whethe reject or accept the new configuration
  * ---------------------------------------------------------------------------*/
 void ARTn::judgement()
 {
@@ -229,6 +238,8 @@ void ARTn::judgement()
  * ---------------------------------------------------------------------------*/
 void ARTn::store_config(string file){
   out_event_list << file << '\t';
+  mydump->modify_file(file);
+  mydump->write();
 }
 
 /* -----------------------------------------------------------------------------
@@ -281,6 +292,7 @@ void ARTn::myinit()
   random = new RanPark(lmp, 12340);
   evalf = 0;
 
+
   // for peratom vector I use
   vec_count = 4;
   fix_minimize->add_vector(3);
@@ -294,15 +306,9 @@ void ARTn::myinit()
   ++vec_count;
 }
 
-/* -----------------------------------------------------------------------------
- *
- * ---------------------------------------------------------------------------*/
-void ARTn::store_x()
-{
-}
 
 /* -----------------------------------------------------------------------------
- *
+ * Try to find saddle point. If failed, return 0, else return 1
  * ---------------------------------------------------------------------------*/
 int ARTn::find_saddle()
 {
