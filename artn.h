@@ -51,10 +51,13 @@ private:
     double myenergy_force();
     void lanczos(bool , int , int);
     ARTn_dump * mydump;
+    inline void outlog(char *tmp){if (me == 0) out_log << tmp << flush ;}
+    inline void outeven(char *tmp){if (me == 0) out_event_list << tmp << flush;}
 
     int me;
     int vec_count;
     int evalf;
+    bool eigen_vector_exist;
 
     double eref;
     double eigenvalue;
@@ -84,6 +87,7 @@ private:
     int number_lanczos_vectors_H;	// Number of vectors included in lanczos procedure in the Harmonic well
     int number_lanczos_vectors_C;	// Number of vectors included in lanczos procedure in convergence
     double delta_displ_lanczos;		// Step of the numerical derivative of forces in lanczos
+    double eigen_threhold;
 
     // for convergence
     double exit_force_threhold;		// Threshold for convergence at saddle point
