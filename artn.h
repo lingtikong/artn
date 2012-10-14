@@ -60,6 +60,7 @@ private:
     bool eigen_vector_exist;
 
     double eref;
+  
     double eigenvalue;
     double *eigenvector;
     double *x0tmp;
@@ -82,6 +83,7 @@ private:
     int min_number_ksteps;		// Min. number of ksteps before calling lanczos
     double eigenvalue_threhold;		// Eigenvalue threshold for leaving basin
     int max_iter_basin;			// Maximum number of iteraction for leaving the basin (kter)
+    double force_threhold_perp_h;
 
     // for lanczos
     int number_lanczos_vectors_H;	// Number of vectors included in lanczos procedure in the Harmonic well
@@ -92,6 +94,7 @@ private:
     // for convergence
     double exit_force_threhold;		// Threshold for convergence at saddle point
     double prefactor_push_over_saddle;	// Fraction of displacement over the saddle
+    double eigen_fail;
 
     // for output
     ofstream out_event_list;

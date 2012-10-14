@@ -173,8 +173,8 @@ int ARTn::search(int maxevent)
   strm << "min"<<file_counter;
   config_file = strm.str();
   store_config(config_file);
-  config_file.clear();
   if (me == 0)out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
+  config_file.clear();
   for (int ievent = 0; ievent < maxevent; ievent++){
     while (!find_saddle());
     ostringstream strm(config_file);
@@ -195,12 +195,13 @@ return 1;
  * ---------------------------------------------------------------------------*/
 void ARTn::downhill()
 {
-  for(int i = 0; i < nvec; ++i) xvec[i] = (xvec[i] - x0[i]) * prefactor_push_over_saddle;
+  for(int i = 0; i < nvec; ++i) xvec[i] = x0[i] + (xvec[i] - x0[i]) * prefactor_push_over_saddle;
   energy_force(1);
   outlog("Start to minimize the configuration to reach another minimal.\n");
   stop_condition = min_converge(max_converge_steps);
   stopstr = stopstrings(stop_condition);
 
+  ecurrent = energy_force(1);
   if (me == 0){
     out_log << "- Minimize stop condition: "<< stopstr<< endl;
     out_log << "- Current energy : " << ecurrent << endl;
@@ -261,16 +262,17 @@ void ARTn::mysetup()
   max_num_events = 1000;
   activation_maxiter = 300;
   increment_size = 0.09;
-  force_threhold_perp_rel = 0.5;
+  force_threhold_perp_rel = 0.05;
 
   // for harmonic well
   initial_step_size = 0.05;
   basin_factor = 2.1;
-  max_perp_moves_basin = 3;
-  min_number_ksteps = 3;
+  max_perp_moves_basin = 8;		// 3
+  min_number_ksteps = 3;		
   eigenvalue_threhold = -0.05;
   //max_iter_basin = 12;
   max_iter_basin = 100;
+  force_threhold_perp_h = 0.5;
 
   // for lanczos
   //number_lanczos_vectors_H = 13;
@@ -282,6 +284,7 @@ void ARTn::mysetup()
   // for convergence
   exit_force_threhold = 0.25;
   prefactor_push_over_saddle = 0.3;
+  eigen_fail = 0.2;
 
   // for output
   event_list_file = "events.list";
@@ -384,7 +387,7 @@ int ARTn::find_saddle()
       }
       MPI_Allreduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,world);
       fperp2 = sqrt(fperp2all);
-      if (fperp2 < force_threhold_perp_rel || m_perp > max_perp_moves_basin || nfail > 5) break; // condition to break
+      if (fperp2 < force_threhold_perp_h || m_perp > max_perp_moves_basin || nfail > 5) break; // condition to break
 
       for (int i = 0; i < nvec; ++i){
 	x0tmp[i] = xvec[i];
@@ -541,7 +544,7 @@ int ARTn::find_saddle()
     }
 
 
-    if (eigenvalue > 0.){
+    if (eigenvalue > eigen_fail){
       if (me == 0){
 	out_log << "Failed to find the saddle point in lanczos steps, for eigenvalue > 0."<<'\n';
 	out_log << "Reassign the random direction.";
