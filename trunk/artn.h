@@ -22,8 +22,10 @@ class ARTn_dump: public DumpAtom{
   public:
     ARTn_dump(LAMMPS *lmp, int narg, char**arg):DumpAtom(lmp, narg, arg){};
     void modify_file(string file){
-      fclose(fp);
-      fp = fopen(file.c_str(),"w");
+      if (me == 0){
+	fclose(fp);
+	fp = fopen(file.c_str(),"w");
+      }
     };
 };
 
