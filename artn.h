@@ -18,16 +18,16 @@ CommandStyle(artn,ARTn)
 #include "dump_atom.h"
 using namespace std;
 namespace LAMMPS_NS{
-class ARTn_dump: public DumpAtom{
-  public:
-    ARTn_dump(LAMMPS *lmp, int narg, char**arg):DumpAtom(lmp, narg, arg){};
-    void modify_file(string file){
-      if (me == 0){
-	fclose(fp);
-	fp = fopen(file.c_str(),"w");
-      }
-    };
-};
+//class ARTn_dump: public DumpAtom{
+//  public:
+//    ARTn_dump(LAMMPS *lmp, int narg, char**arg):DumpAtom(lmp, narg, arg){};
+//    void modify_file(string file){
+//      if (me == 0){
+//	fclose(fp);
+//	fp = fopen(file.c_str(),"w");
+//      }
+//    };
+//};
 
 class ARTn: public MinLineSearch{
 public:
@@ -45,6 +45,7 @@ private:
     void store_x();
     int find_saddle();
     void global_random_move();
+    void group_random_move();
     void downhill();
     void judgement();
     void myreset_vectors();
@@ -52,7 +53,9 @@ private:
     void reset_coords();
     double myenergy_force();
     void lanczos(bool , int , int);
-    ARTn_dump * mydump;
+    //ARTn_dump * mydump;
+    DumpAtom * dumpmin;
+    DumpAtom * dumpsadl;
     inline void outlog(char *tmp){if (me == 0) out_log << tmp << flush ;}
     inline void outeven(char *tmp){if (me == 0) out_event_list << tmp << flush;}
 
@@ -77,6 +80,7 @@ private:
     int activation_maxiter;		// Maximum number of iteraction for reaching the saddle point
     double increment_size;		// Overall scale for the increment moves
     double force_threhold_perp_rel;	// Threshold for perpendicular relaxation
+    bool group_random;
 
     // for harmonic well
     double initial_step_size;		// Size of initial displacement

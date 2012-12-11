@@ -45,9 +45,10 @@
 #include "output.h"
 #include "thermo.h"
 #include "timer.h"
+#include "group.h"
 #include <iomanip>
 
-#define TEST
+//#define TEST
 #define TESTOUPUT
 
 using namespace LAMMPS_NS;
@@ -73,12 +74,23 @@ enum{MAXITER,MAXEVAL,ETOL,FTOL,DOWNHILL,ZEROALPHA,ZEROFORCE,ZEROQUAD};
 ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp){
   char **tmp;
   memory->create(tmp, 5, 10, "Artn string");
-  strcpy(tmp[0],"ARTn");
+  strcpy(tmp[0],"ARTnmin");
   strcpy(tmp[1],"all");
   strcpy(tmp[2],"atom");
   strcpy(tmp[3],"1");
-  strcpy(tmp[4],"min1000");
-  mydump = new ARTn_dump(lmp, 5, tmp);
+  strcpy(tmp[4],"min.lammpstrj");
+  dumpmin = new DumpAtom(lmp, 5, tmp);
+  //strcpy(tmp[0],"ARTnsadl");
+  //strcpy(tmp[4],"saddle.lammpstrj");
+  //dumpsadl = new DumpAtom(lmp, 5, tmp);
+  memory->destroy(tmp);
+  memory->create(tmp, 5, 10, "Artn string");
+  strcpy(tmp[0],"ARTnsadl");
+  strcpy(tmp[1],"all");
+  strcpy(tmp[2],"atom");
+  strcpy(tmp[3],"1");
+  strcpy(tmp[4],"sadl.lammpstrj");
+  dumpsadl = new DumpAtom(lmp, 5, tmp);
   memory->destroy(tmp);
 }
 
@@ -90,7 +102,8 @@ ARTn::~ARTn()
   out_log.close();
   out_event_list.close();
   delete random;
-  delete mydump;
+  delete dumpmin;
+  delete dumpsadl;
 }
 
 /* -----------------------------------------------------------------------------
@@ -120,7 +133,9 @@ void ARTn::command(int narg, char ** arg)
   if (update->laststep < 0 || update->laststep > MAXBIGINT) error->all(FLERR,"Too many iterations");
 
   lmp->init();
-  mydump->init();
+  //mydump->init();
+  dumpmin->init();
+  dumpsadl->init();
   init();
   update->minimize->setup();
   setup();
@@ -177,6 +192,7 @@ int ARTn::search(int maxevent)
   ostringstream strm;
   strm << "min"<<file_counter;
   config_file = strm.str();
+  dumpmin->write();
   store_config(config_file);
   if (me == 0)out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
   config_file.clear();
@@ -185,6 +201,7 @@ int ARTn::search(int maxevent)
     ostringstream strm(config_file);
     strm << "sad"<<file_counter;
     config_file = strm.str();
+    dumpsadl->write();
     store_config(config_file);
     config_file.clear();
     ++file_counter;
@@ -216,9 +233,10 @@ void ARTn::downhill()
   ostringstream strm;
   strm << "min"<<file_counter;
   config_file = strm.str();
+  dumpmin->write();
   store_config(config_file);
-  config_file.clear();
   if (me == 0) out_log << "Configuration stored in file: "<<config_file<<'\n'<<endl;
+  config_file.clear();
 
 }
 
@@ -233,7 +251,8 @@ void ARTn::judgement()
     for (int i =0; i < nvec; ++i) x0[i] = xvec[i];
 
     outlog("Accept this new configuration.\n");
-    outeven("accept\n");
+    outeven("accept\t");
+    out_event_list<<ecurrent<<endl;
 
   } else {
 
@@ -242,7 +261,8 @@ void ARTn::judgement()
     }
     ecurrent = energy_force(1);
     outlog("Reject this new configuration.\n");
-    outeven("reject\n");
+    outeven("reject\t");
+    out_event_list << ecurrent << endl;
   }
 }
 
@@ -254,33 +274,34 @@ void ARTn::store_config(string file){
   cout << "Entering store_config(), proc: " << me << endl;
 #endif
   if (me == 0) out_event_list << file << '\t';
-  mydump->modify_file(file);
-  mydump->write();
+  //mydump->modify_file(file);
+  //mydump->write();
 #ifdef TEST
   cout << "Out of store_config(), proc: " << me << endl;
 #endif
 }
 
 /* -----------------------------------------------------------------------------
- * setup default parameters, these values come from Norman's code
+ * setup default parameters, some values come from Norman's code
  * ---------------------------------------------------------------------------*/
 void ARTn::mysetup()
 {
   max_converge_steps = 1000000;
 
   // for art
-  temperature = -0.5;
+  temperature = 0.5;
   max_num_events = 1000;
   activation_maxiter = 300;
   increment_size = 0.09;
   force_threhold_perp_rel = 0.05;
+  group_random = true;
 
   // for harmonic well
   initial_step_size = 0.05;
   basin_factor = 2.1;
   max_perp_moves_basin = 8;		// 3
-  min_number_ksteps = 3;		
-  eigenvalue_threhold = -0.05;
+  min_number_ksteps = 2;		
+  eigenvalue_threhold = -0.001;
   //max_iter_basin = 12;
   max_iter_basin = 100;
   force_threhold_perp_h = 0.5;
@@ -293,9 +314,9 @@ void ARTn::mysetup()
   eigen_threhold = 0.1;
 
   // for convergence
-  exit_force_threhold = 0.25;
+  exit_force_threhold = 0.1;
   prefactor_push_over_saddle = 0.3;
-  eigen_fail = 0.2;
+  eigen_fail = 0.1;
 
   // for output
   event_list_file = "events.list";
@@ -367,13 +388,14 @@ int ARTn::find_saddle()
   cout << "After minimize , eigenvalue = " << eigenvalue << endl;
   */
 #endif
-  global_random_move();
+  if (group_random) group_random_move();
+  else global_random_move();
   ecurrent = energy_force(1);
   ++evalf;
 
 #ifdef TESTOUPUT
   if ( me ==0 ) {
-    out_log << setiosflags(ios::fixed) << setiosflags(ios::right) << setprecision(6) << endl;
+    out_log << setiosflags(ios::fixed) << setiosflags(ios::right) << setprecision(5) << endl;
     out_log << setw(12) << "E-Eref"<< setw(12) << "m_perp" <<setw(12) << "trial" << setw(12) <<"ftot";
     out_log << setw(12) << "fperp" << setw(12) << "eigenvalue" << setw(12) << "delr" << setw(12) << "evalf\n";
   }
@@ -637,6 +659,32 @@ void ARTn::global_random_move()
   return;
 }
 
+/* ------------------------------------------------------------------------------
+ * give a group random delta_x
+ * ----------------------------------------------------------------------------*/
+void ARTn::group_random_move()
+{
+  double *delpos = new double[nvec];
+  double norm = 0.;
+  for (int i = 0; i < nvec; ++i){
+    int igroup = group->find("artn");
+    if (igroup = -1) error->all(FLERR,"Could not find artn group!");
+    int bit = group->bitmask[igroup];
+    if (bit & atom->mask[i]) delpos[i] = 0.5 - random->uniform();
+  }
+  center(delpos, nvec);
+  for (int i = 0; i < nvec; ++i) norm += delpos[i] *delpos[i];
+  double normall;
+  MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
+
+  double norm_i = 1./sqrt(normall);
+  for (int i=0; i < nvec; i++){
+    h[i] = delpos[i] * norm_i;
+    xvec[i] += initial_step_size * h[i];
+  }
+  delete []delpos;
+  return;
+}
 /* -----------------------------------------------------------------------------
  * converge to minimum, here I use conjugate gradient method.
  * ---------------------------------------------------------------------------*/
