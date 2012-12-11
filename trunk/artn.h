@@ -44,6 +44,7 @@ private:
     void store_config(string);
     void store_x();
     int find_saddle();
+    void read_config();
     void global_random_move();
     void group_random_move();
     void downhill();

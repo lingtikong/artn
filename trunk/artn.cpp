@@ -50,6 +50,7 @@
 
 //#define TEST
 #define TESTOUPUT
+#define MAXLINE 256
 
 using namespace LAMMPS_NS;
 using namespace std;
@@ -286,42 +287,110 @@ void ARTn::store_config(string file){
  * ---------------------------------------------------------------------------*/
 void ARTn::mysetup()
 {
-  max_converge_steps = 1000000;
+  read_config();
+  //max_converge_steps = 1000000;
 
-  // for art
-  temperature = 0.5;
-  max_num_events = 1000;
-  activation_maxiter = 300;
-  increment_size = 0.09;
-  force_threhold_perp_rel = 0.05;
-  group_random = true;
+  //// for art
+  //temperature = 0.5;
+  //max_num_events = 1000;
+  //activation_maxiter = 300;
+  //increment_size = 0.09;
+  //force_threhold_perp_rel = 0.05;
+  //group_random = true;
 
-  // for harmonic well
-  initial_step_size = 0.05;
-  basin_factor = 2.1;
-  max_perp_moves_basin = 8;		// 3
-  min_number_ksteps = 2;		
-  eigenvalue_threhold = -0.001;
-  //max_iter_basin = 12;
-  max_iter_basin = 100;
-  force_threhold_perp_h = 0.5;
+  //// for harmonic well
+  //initial_step_size = 0.05;
+  //basin_factor = 2.1;
+  //max_perp_moves_basin = 8;		// 3
+  //min_number_ksteps = 0;		
+  //eigenvalue_threhold = -0.001;
+  ////max_iter_basin = 12;
+  //max_iter_basin = 100;
+  //force_threhold_perp_h = 0.5;
 
-  // for lanczos
-  //number_lanczos_vectors_H = 13;
-  number_lanczos_vectors_H = 40;
-  number_lanczos_vectors_C = 12;
-  delta_displ_lanczos = 0.01;
-  eigen_threhold = 0.1;
+  //// for lanczos
+  ////number_lanczos_vectors_H = 13;
+  //number_lanczos_vectors_H = 40;
+  //number_lanczos_vectors_C = 12;
+  //delta_displ_lanczos = 0.01;
+  //eigen_threhold = 0.1;
 
-  // for convergence
-  exit_force_threhold = 0.1;
-  prefactor_push_over_saddle = 0.3;
-  eigen_fail = 0.1;
+  //// for convergence
+  //exit_force_threhold = 0.1;
+  //prefactor_push_over_saddle = 0.3;
+  //eigen_fail = 0.1;
 
-  // for output
-  event_list_file = "events.list";
-  log_file = "log.file";
-  file_counter = 1000;
+  //// for output
+  //event_list_file = "events.list";
+  //log_file = "log.file";
+  //file_counter = 1000;
+}
+void ARTn::read_config()
+{
+  char oneline[MAXLINE], *token1, *token2;
+  FILE *fp = fopen("config", "r");
+  if (fp == NULL){
+    error->all(FLERR, "open config file error!");
+  }
+  while(1){
+    fgets(oneline, MAXLINE, fp);
+    if(feof(fp)) break;
+
+    token1 = strtok(oneline," \t\n\r\f");
+    if (token1 == NULL || token1 == "#") continue;
+    token2 = strtok(NULL," \t\n\r\f");
+    if (strcmp(token1, "max_converge_steps") == 0){
+      max_converge_steps = atoi(token2);
+    }else if (strcmp(token1, "temperature") == 0){
+      temperature = atof(token2);
+    }else if (strcmp(token1, "max_num_events") == 0){
+      max_num_events = atoi(token2);
+    }else if (strcmp(token1, "activation_maxiter") == 0){
+      activation_maxiter = atoi(token2);
+    }else if (strcmp(token1, "increment_size") == 0){
+      increment_size = atof(token2);
+    }else if (strcmp(token1, "force_threhold_perp_rel") == 0){
+      force_threhold_perp_rel = atof(token2);
+    }else if (strcmp(token1, "group_random") == 0){
+      group_random = true;
+    }else if (strcmp(token1, "initial_step_size") == 0){
+      initial_step_size = atof(token2);
+    }else if (strcmp(token1, "basin_factor") == 0){
+      basin_factor = atof(token2);
+    }else if (strcmp(token1, "max_perp_moves_basin") == 0){
+      max_perp_moves_basin = atoi(token2);
+    }else if (strcmp(token1, "min_number_ksteps") == 0){
+      min_number_ksteps = atoi(token2);
+    }else if (strcmp(token1, "eigenvalue_threhold") == 0){
+      eigenvalue_threhold = atof(token2);
+    }else if (strcmp(token1, "max_iter_basin") == 0){
+      max_iter_basin = atoi(token2);
+    }else if (strcmp(token1, "force_threhold_perp_h") == 0){
+      force_threhold_perp_h = atof(token2);
+    }else if (strcmp(token1, "number_lanczos_vectors_H") == 0){
+      number_lanczos_vectors_H = atoi(token2);
+    }else if (strcmp(token1, "number_lanczos_vectors_C") == 0){
+      number_lanczos_vectors_C = atoi(token2);
+    }else if (strcmp(token1, "delta_displ_lanczos") == 0){
+      delta_displ_lanczos = atof(token2);
+    }else if (strcmp(token1, "eigen_threhold") == 0){
+      eigen_threhold = atof(token2);
+    }else if (strcmp(token1, "exit_force_threhold") == 0){
+      exit_force_threhold = atof(token2);
+    }else if (strcmp(token1, "prefactor_push_over_saddle") == 0){
+      prefactor_push_over_saddle = atof(token2);
+    }else if (strcmp(token1, "eigen_fail") == 0){
+      eigen_fail = atoi(token2);
+    }else if (strcmp(token1, "event_list_file") == 0){
+      event_list_file = token2;
+    }else if (strcmp(token1, "log_file") == 0){
+      log_file = token2;
+    }else if (strcmp(token1, "file_counter") == 0){
+      file_counter = atoi(token2);
+    }else error->all(FLERR, "Config file error! Command not found");    
+  }
+  fclose(fp);
+  return;
 }
 
 /* -----------------------------------------------------------------------------
@@ -665,14 +734,20 @@ void ARTn::global_random_move()
 void ARTn::group_random_move()
 {
   double *delpos = new double[nvec];
+  for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   double norm = 0.;
-  for (int i = 0; i < nvec; ++i){
-    int igroup = group->find("artn");
-    if (igroup = -1) error->all(FLERR,"Could not find artn group!");
-    int bit = group->bitmask[igroup];
-    if (bit & atom->mask[i]) delpos[i] = 0.5 - random->uniform();
+  int igroup = group->find("artn");
+  if (igroup == -1) error->all(FLERR,"Could not find artn group!");
+  int bit = group->bitmask[igroup];
+  int nlocal = atom->nlocal;
+  for (int i = 0; i < nlocal; ++i){
+    if (bit & atom->mask[i]){
+      delpos[i*3] = 0.5 - random->uniform();
+      delpos[i*3+1] = 0.5 -random->uniform();
+      delpos[i*3+2] = 0.5 - random->uniform();
+    }
   }
-  center(delpos, nvec);
+  //center(delpos, nvec);
   for (int i = 0; i < nvec; ++i) norm += delpos[i] *delpos[i];
   double normall;
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
