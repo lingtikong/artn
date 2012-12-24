@@ -48,7 +48,7 @@
 #include "group.h"
 #include <iomanip>
 
-//#define TEST
+#define TEST
 #define TESTOUPUT
 #define MAXLINE 256
 
@@ -183,6 +183,9 @@ int ARTn::search(int maxevent)
   double testsum = 0.;
   for (int i = 0; i < nvec; ++i) testsum += fvec[i] * fvec[i];
   cout << "Afer minimize, ftot = " << sqrt(testsum) << endl;
+  lanczos(!eigen_vector_exist, 1, number_lanczos_vectors_H);
+  cout << "eigenvalue = " << eigenvalue << endl;
+
 #endif
   stopstr = stopstrings(stop_condition);
   if (me == 0){
@@ -287,43 +290,44 @@ void ARTn::store_config(string file){
  * ---------------------------------------------------------------------------*/
 void ARTn::mysetup()
 {
+  max_converge_steps = 1000000;
+
+  // for art
+  temperature = 0.5;
+  max_num_events = 1000;
+  activation_maxiter = 300;
+  increment_size = 0.09;
+  force_threhold_perp_rel = 0.05;
+  group_random = false;
+
+  // for harmonic well
+  initial_step_size = 0.05;
+  basin_factor = 2.1;
+  max_perp_moves_basin = 8;		// 3
+  min_number_ksteps = 0;		
+  eigenvalue_threhold = -0.001;
+  //max_iter_basin = 12;
+  max_iter_basin = 100;
+  force_threhold_perp_h = 0.5;
+
+  // for lanczos
+  //number_lanczos_vectors_H = 13;
+  number_lanczos_vectors_H = 40;
+  number_lanczos_vectors_C = 12;
+  delta_displ_lanczos = 0.01;
+  eigen_threhold = 0.1;
+
+  // for convergence
+  exit_force_threhold = 0.1;
+  prefactor_push_over_saddle = 0.3;
+  eigen_fail = 0.1;
+
+  // for output
+  event_list_file = "events.list";
+  log_file = "log.file";
+  file_counter = 1000;
+
   read_config();
-  //max_converge_steps = 1000000;
-
-  //// for art
-  //temperature = 0.5;
-  //max_num_events = 1000;
-  //activation_maxiter = 300;
-  //increment_size = 0.09;
-  //force_threhold_perp_rel = 0.05;
-  //group_random = true;
-
-  //// for harmonic well
-  //initial_step_size = 0.05;
-  //basin_factor = 2.1;
-  //max_perp_moves_basin = 8;		// 3
-  //min_number_ksteps = 0;		
-  //eigenvalue_threhold = -0.001;
-  ////max_iter_basin = 12;
-  //max_iter_basin = 100;
-  //force_threhold_perp_h = 0.5;
-
-  //// for lanczos
-  ////number_lanczos_vectors_H = 13;
-  //number_lanczos_vectors_H = 40;
-  //number_lanczos_vectors_C = 12;
-  //delta_displ_lanczos = 0.01;
-  //eigen_threhold = 0.1;
-
-  //// for convergence
-  //exit_force_threhold = 0.1;
-  //prefactor_push_over_saddle = 0.3;
-  //eigen_fail = 0.1;
-
-  //// for output
-  //event_list_file = "events.list";
-  //log_file = "log.file";
-  //file_counter = 1000;
 }
 void ARTn::read_config()
 {
@@ -337,7 +341,7 @@ void ARTn::read_config()
     if(feof(fp)) break;
 
     token1 = strtok(oneline," \t\n\r\f");
-    if (token1 == NULL || token1 == "#") continue;
+    if (token1 == NULL || strcmp(token1, "#") == 0) continue;
     token2 = strtok(NULL," \t\n\r\f");
     if (strcmp(token1, "max_converge_steps") == 0){
       max_converge_steps = atoi(token2);
@@ -442,6 +446,8 @@ int ARTn::find_saddle()
 
   for (int i = 0; i < nvec; i++) x0[i] = xvec[i];
 #ifdef TEST
+  lanczos(!eigen_vector_exist, 1, number_lanczos_vectors_H);
+  cout << "Befor group_random_move, eigenvalue = " << eigenvalue << endl;
   //global_random_move();
 /*  outlog("Test: Start to minimize the configuration to reach another minimal.\n");
   stop_condition = min_converge(max_converge_steps);
@@ -669,7 +675,7 @@ int ARTn::find_saddle()
   outlog("Failed to find the saddle point in lanczos steps, for reaching the max lanczos steps.\n");
   outlog("Reassign the random direction.\n");
   for (int i = 0; i < nvec; ++i) xvec[i] = x0[i];
-
+  energy_force(0);
   return 0;
 }
 
