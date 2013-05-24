@@ -47,6 +47,7 @@ private:
     void read_config();
     void global_random_move();
     void group_random_move();
+    void local_random_move();
     void downhill();
     void judgement();
     void myreset_vectors();
@@ -54,6 +55,7 @@ private:
     void reset_coords();
     double myenergy_force();
     void lanczos(bool , int , int);
+    int min_perpendicular_fire(int );
     //ARTn_dump * mydump;
     DumpAtom * dumpmin;
     DumpAtom * dumpsadl;
@@ -70,7 +72,10 @@ private:
     double eigenvalue;
     double *eigenvector;
     double *x0tmp;
+    double *x00;
     double *h_old;
+    double *vvec;
+    double *fperp;
 
     RanPark *random;
 
@@ -82,6 +87,8 @@ private:
     double increment_size;		// Overall scale for the increment moves
     double force_threhold_perp_rel;	// Threshold for perpendicular relaxation
     bool group_random;
+    bool local_random;
+    bool fire_on;
 
     // for harmonic well
     double initial_step_size;		// Size of initial displacement
@@ -102,6 +109,8 @@ private:
     double exit_force_threhold;		// Threshold for convergence at saddle point
     double prefactor_push_over_saddle;	// Fraction of displacement over the saddle
     double eigen_fail;
+    double max_perp_moves_C;
+    double force_threhold_perp_rel_C;
 
     // for output
     ofstream out_event_list;
@@ -115,3 +124,4 @@ private:
 }
 #endif
 #endif
+
