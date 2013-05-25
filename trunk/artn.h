@@ -37,12 +37,11 @@ public:
     void command(int, char **);
 
 private:
-    void mysetup();
+    void mysetup();			
     void myinit();
     int iterate(int );
     int min_converge(int);
     void store_config(string);
-    void store_x();
     int find_saddle();
     void read_config();
     void global_random_move();
@@ -53,7 +52,6 @@ private:
     void myreset_vectors();
     void center(double *, int );
     void reset_coords();
-    double myenergy_force();
     void lanczos(bool , int , int);
     int min_perpendicular_fire(int );
     //ARTn_dump * mydump;
@@ -86,9 +84,9 @@ private:
     int activation_maxiter;		// Maximum number of iteraction for reaching the saddle point
     double increment_size;		// Overall scale for the increment moves
     double force_threhold_perp_rel;	// Threshold for perpendicular relaxation
-    bool group_random;
-    bool local_random;
-    bool fire_on;
+    bool group_random;			// do group random move away from minimum
+    bool local_random;			// do local random move away from minimum
+    bool fire_on;			// use FIRE to do minimuzation in the perpendicular direction
 
     // for harmonic well
     double initial_step_size;		// Size of initial displacement
@@ -108,8 +106,8 @@ private:
     // for convergence
     double exit_force_threhold;		// Threshold for convergence at saddle point
     double prefactor_push_over_saddle;	// Fraction of displacement over the saddle
-    double eigen_fail;
-    double max_perp_moves_C;
+    double eigen_fail;			// the eigen cutoff for failing in searching saddle point
+    double max_perp_moves_C;		
     double force_threhold_perp_rel_C;
 
     // for output
