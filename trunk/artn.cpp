@@ -852,23 +852,28 @@ void ARTn::local_random_move()
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   double norm = 0.;
   int natoms = atom->natoms;
-  int that_atom = int(natoms * random->uniform());
+  int that_atom = floor(natoms * random->uniform());
   if (that_atom == natoms) that_atom -= 1;
   else that_atom += 1;
   int *tag = atom->tag;
   int nlocal = atom->nlocal;
+  int flag = 0, flagall = 0;
   for (int i = 0; i < nlocal; ++i){
     if (that_atom == tag[i]){
+      flag = 1;
       delpos[i*3] = 0.5 - random->uniform();
       delpos[i*3+1] = 0.5 -random->uniform();
       delpos[i*3+2] = 0.5 - random->uniform();
     }
   }
-  for (int i = 0; i < nvec; ++i) norm += delpos[i] *delpos[i];
+  for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
   double normall;
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
-
-  if (normall == 0.) error->all(FLERR,"local random move error, atom not found.");
+  MPI_Allreduce(&flag,&flagall,1,MPI_DOUBLE,MPI_SUM,world);
+  if (flagall == 0) {
+    out_log << "That atom: " << that_atom << endl;
+    error->all(FLERR,"local random move error, atom not found.");
+  }
   double norm_i = 1./sqrt(normall);
   for (int i=0; i < nvec; i++){
     h[i] = delpos[i] * norm_i;
