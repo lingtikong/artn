@@ -1348,21 +1348,15 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
   const double IDEL_LANCZOS = 1.0 / DEL_LANCZOS;
 
   // set r(k-1) according to eigenvector or random vector
-  if (! new_projection){
-    for (int i = 0; i<nvec; i++) r_k_1[i] = eigenvector[i];
-
-  } else {
-    for (int i = 0; i<nvec; i++) r_k_1[i] = 0.5 - random->uniform();
-  }
+  if (! new_projection) for (int i = 0; i<nvec; i++) r_k_1[i] = eigenvector[i];
+  else for (int i = 0; i<nvec; i++) r_k_1[i] = 0.5 - random->uniform();
   for (int i =0; i< nvec; ++i) beta_k_1 += r_k_1[i] * r_k_1[i];
 
   MPI_Allreduce(&beta_k_1,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
-  // beta(k-1) = |r(k-1)|
   beta_k_1 = sqrt(tmp);
 
   double eigen1 = 0., eigen2 = 0.;
   double *work, *z;
-  //long int ldz = maxvec, info;
   long ldz = maxvec, info;
   char jobs = 'V';
   z = new double [ldz*maxvec];
@@ -1374,27 +1368,11 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     g[i] = fvec[i];
   }
 
-  // q(k) = r(k-1)/ beta(k-1)
-  // lanc (n-1, :) = q(k)
   for ( long n = 1; n <= maxvec; ++n){
     for (int i = 0; i < nvec; ++i){
       q_k[i] = r_k_1[i] / beta_k_1;
       lanc[n-1][i] = q_k[i];
     }
-
-    //for (int i = 0; i < n-1; i++){
-    //  double tmp;
-    //  tmp = 0.;
-    //  for (int j = 0; j < nvec; j++){
-    //    tmp += lanc[i][j] * q_k[j];
-    //  }
-    //  for (int j = 0; j < nvec; j++){
-    //    q_k[j] -= tmp * lanc[i][j];
-    //  }
-    //}
-    //for (int i = 0; i < nvec; ++i){
-    //  lanc[n-1][i] = q_k[i];
-    //}
 
     // random move to caculate u(k) with the finite difference approximation
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i] + q_k[i] * DEL_LANCZOS;
@@ -1411,7 +1389,7 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
       lanc[i] = fix_lanczos->request_vector(i+5);
     }
     alpha_k = 0.;
-    // get u(k) and r(k)
+
     for (int i = 0; i < nvec; ++i){
       u_k[i] = (g[i] - fvec[i]) * IDEL_LANCZOS;
       r_k[i] = u_k[i] - beta_k_1 * q_k_1[i];
@@ -1420,13 +1398,12 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     MPI_Allreduce(&alpha_k,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
     alpha_k = tmp;
     beta_k = 0.;
-    // update r(k) = r(k) - alpha(k) q(k)
+
     for (int i = 0; i < nvec; ++i){
       r_k[i] -= alpha_k * q_k[i];
       beta_k += r_k[i] * r_k[i];
     }
     MPI_Allreduce(&beta_k,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
-    // beta(k) = |r(k)|
 
     beta_k = sqrt(tmp);
     d[n-1] = alpha_k;
@@ -1436,12 +1413,10 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
       e_bak[i] = e[i];
     }
     if (n >= 2){
-      printf("%ld\n", info);
       dstev_(&jobs,&n,d_bak,e_bak,z,&ldz,work,&info);
-      printf("%ld\n", info);
       if (info != 0) error->all(FLERR,"destev_ error in Lanczos subroute");
-      eigen1 = eigen2;
-      eigen2 = d_bak[0];
+
+      eigen1 = eigen2; eigen2 = d_bak[0];
     }
     if (n >= 3 && fabs((eigen2-eigen1)/eigen1) < eigen_th_lancz) {
       con_flag = 1;
@@ -1472,6 +1447,7 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     }
     beta_k_1 = beta_k;
   }
+
   if (con_flag == 0){
     //outlog("WARNING, LNACZOS method not converged!\n");
     eigenvalue = eigen2;
@@ -1480,11 +1456,7 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
       fvec[i] = g[i];
     }
   }
-  //delete []r_k_1;
-  //delete []q_k_1;
-  //delete []q_k;
-  //delete []u_k;
-  //delete []r_k;
+
   delete []d;
   delete []e;
   delete []d_bak;
