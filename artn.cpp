@@ -23,10 +23,9 @@
 #include "compute.h"
 #include "force.h"
 #include "group.h"
+#include "math.h"
 
 #define MAXLINE 512
-//#define MAX(A,B) ((A) > (B) ? (A):(B))
-//#define MIN(A,B) ((A) < (B) ? (A):(B))
 
 using namespace LAMMPS_NS;
 
@@ -156,8 +155,8 @@ int ARTn::iterate(int maxevent)
   // minimize before searching saddle points.
   char str[MAXLINE];
   if (me == 0){
-    sprintf(str, "Minimization the initial configuration, id = %d ....\n", ref_id);
-    fprintf(fp1, "%s", str);
+    sprintf(str, "\nMinimization the initial configuration, id = %d ....\n", ref_id);
+    fprintf(fp1, "\n%s", str);
     if (screen) fprintf(screen, str);
   }
 
@@ -197,6 +196,7 @@ int ARTn::iterate(int maxevent)
     }
 
     fprintf(fp1, "Initial configuration (id = %d) was dumped out.\n", ref_id);
+    if (screen) fprintf(screen, "Initial configuration (id = %d) was dumped out.\n", ref_id);
   }
 
   int ievent = 0;
@@ -243,7 +243,10 @@ int ARTn::check_saddle_min(){
   }
   //for (int i = 0; i < nvec; ++i) xvec[i] = x0[i] + push_over_saddle * (xvec[i] - x0[i]);
   ecurrent = energy_force(1);
-  fprintf(fp1, "Start to check saddle point.\n");
+  if (me == 0){
+    fprintf(fp1, "\nNow to check if the found saddle is truly linked to config %d\n", ref_id);
+    if (screen) fprintf(screen, "\nNow to check if the found saddle is truly linked to config %d\n", ref_id);
+  }
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps);
   stopstr = stopstrings(stop_condition);
@@ -273,7 +276,10 @@ int ARTn::check_saddle_min(){
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
   if (drall < 0.1) {
-    if (me == 0) fprintf(fp1, "  dr = %g, accept this saddle point.\n", drall);;
+    if (me == 0){
+      fprintf(fp1, "  dr = %g, accept this saddle point.\n", drall);
+      if (screen) fprintf(screen, "  dr = %g, accept this saddle point.\n", drall);
+    }
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x_saddle[i];
       h[i] = htmp[i];
@@ -282,16 +288,22 @@ int ARTn::check_saddle_min(){
     ecurrent = energy_force(1);
     myreset_vectors();
     return 1;
+
   } else {
-    if (me == 0) fprintf(fp1, "  dr = %g, reject this saddle point.\n", drall);;
+
+    if (me == 0){
+      fprintf(fp1, "  dr = %g, reject this saddle point.\n", drall);;
+      if (screen) fprintf(screen, "  dr = %g, reject this saddle point.\n", drall);
+    }
+
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x00[i];
     }
     ecurrent = energy_force(1);
     myreset_vectors();
-    return 0;
   }
 
+return 0;
 }
 
 /* -----------------------------------------------------------------------------
@@ -310,8 +322,12 @@ void ARTn::push_down()
 
   ecurrent = energy_force(1);
   if (me == 0){
-    fprintf(fp1, "After push over the saddle point of %d, the current becomes: %g\n", sad_id, ecurrent);
+    fprintf(fp1, "\nAfter push over the saddle point of %d, the current engergy becomes: %g\n", sad_id, ecurrent);
     fprintf(fp1, "Now begin to minimize the configuration to reach another minimal.\n");
+    if (screen){
+      fprintf(screen, "\nAfter push over the saddle point of %d, the current engergy becomes: %g\n", sad_id, ecurrent);
+      fprintf(screen, "Now begin to minimize the configuration to reach another minimal.\n");
+    }
   }
 
   // do minimization with CG
@@ -334,7 +350,10 @@ void ARTn::push_down()
   dumpmin->write();
   update->ntimestep = idum;
 
-  if (me == 0) fprintf(fp1, "The new minimum from min-%d cross sad-%d is stored as min-%d.\n", ref_id, sad_id, min_id);
+  if (me == 0){
+    fprintf(fp1, "\nThe new minimum from min-%d cross sad-%d is stored as min-%d.\n", ref_id, sad_id, min_id);
+    if (screen) fprintf(screen, "\nThe new minimum from min-%d cross sad-%d is stored as min-%d.\n", ref_id, sad_id, min_id);
+  }
 
 return;
 }
@@ -391,7 +410,10 @@ void ARTn::check_new_min()
   int acc = temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature));
   if (acc){
     ref_id = min_id; eref = ecurrent;
-    if (me == 0) fprintf(fp1, "The new configuration %d is accepted.\n", min_id);
+    if (me == 0){
+      fprintf(fp1, "The new configuration %d is accepted.\n", min_id);
+      if (screen) fprintf(screen, "The new configuration %d is accepted.\n", min_id);
+    }
 
   } else {
     for (int i = 0; i < nvec; ++i){
@@ -400,7 +422,10 @@ void ARTn::check_new_min()
 
     ecurrent = energy_force(1);
     myreset_vectors();
-    if (me == 0) fprintf(fp1, "The new configuration %d is rejected.\n", min_id);
+    if (me == 0){
+      fprintf(fp1, "The new configuration %d is rejected.\n", min_id);
+      if (screen) fprintf(screen, "The new configuration %d is rejected.\n", min_id);
+    }
   }
   if (me == 0) fprintf(fp2, " %lg %d %lg\n", ecurrent, acc, drall);
 
@@ -631,6 +656,7 @@ void ARTn::read_control()
       error->one(FLERR, str);
     }
 
+    fprintf(fp1, "\n============================== ARTn based on LAMMPS ==============================\n");
     fprintf(fp1, "max_conv_steps     %d # %s\n", max_conv_steps, "max_conv_steps for minimization");
     fprintf(fp1, "random_seed        %d # %s\n", seed, "seed for random generator");
     fprintf(fp1, "\n");
@@ -671,6 +697,7 @@ void ARTn::read_control()
     fprintf(fp1, "init_config_id     %d # %s\n", min_id, "initial configuration ID");
     fprintf(fp1, "dump_min_config    %s # %s\n", fmin, "filename to write the atomic dump for stable configurations");
     fprintf(fp1, "dump_sad_config    %s # %s\n", fsad, "filename to write the atomic dump for saddle configurations");
+    fprintf(fp1, "\n==================================================================================\n\n");
   }
 
   // open dump files
@@ -744,10 +771,13 @@ void ARTn::myreset_vectors()
   x0tmp = fix_minimize->request_vector(3);
   h_old = fix_minimize->request_vector(4);
   eigenvector = fix_minimize->request_vector(5);
-  x00 = fix_minimize->request_vector(6);
-  fperp = fix_minimize->request_vector(7);
-  htmp = fix_minimize->request_vector(8);
+
+  x00      = fix_minimize->request_vector(6);
+  fperp    = fix_minimize->request_vector(7);
+  htmp     = fix_minimize->request_vector(8);
   x_saddle =fix_minimize->request_vector(9);
+
+return;
 }
 
 /* -----------------------------------------------------------------------------
@@ -776,7 +806,14 @@ int ARTn::find_saddle( )
   myreset_vectors();
   ++evalf;
 
-  if (me == 0) fprintf(fp1,"step E-Eref m_perp  trial  ftot  fpar  fperp  eigen  delr   evalf\n");
+  if (me == 0){
+    fprintf(fp1, "\nBegin to search for the saddle point for config %d\n", ref_id);
+    fprintf(fp1, "Step E-Eref m_perp  trial  ftot  fpar  fperp  eigen  delr  evalf\n");
+    if (screen){
+      fprintf(screen, "\nBegin to search for the saddle point for config %d\n", ref_id);
+      fprintf(screen, "Step E-Eref m_perp  trial  ftot  fpar  fperp  eigen  delr  evalf\n");
+    }
+  }
 
   // try to leave harmonic well
   for (int local_iter = 0; local_iter < max_iter_basin; local_iter++){
@@ -846,10 +883,16 @@ int ARTn::find_saddle( )
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
 
-    if (me == 0) fprintf(fp1, "%d %lg %d %d %g %g %g %g %g %d\n", local_iter, ecurrent-eref, m_perp, trial, sqrt(ftotall), fpar2all, fperp2, eigenvalue, sqrt(delr), evalf);
+    if (me == 0){
+      fprintf(fp1, "%d %lg %d %d %g %g %g %g %g %d\n", local_iter, ecurrent-eref, m_perp, trial, sqrt(ftotall), fpar2all, fperp2, eigenvalue, sqrt(delr), evalf);
+      if (screen) fprintf(screen, "%d %lg %d %d %g %g %g %g %g %d\n", local_iter, ecurrent-eref, m_perp, trial, sqrt(ftotall), fpar2all, fperp2, eigenvalue, sqrt(delr), evalf);
+    }
 
     if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
-	   if(me == 0) fprintf(fp1, "Out of harmonic well of %d, now search according to the eigenvector\n", ref_id);
+	   if (me == 0){
+        fprintf(fp1, "\nOut of harmonic well of %d, now search according to the eigenvector\n", ref_id);
+        if (screen) fprintf(screen, "\nOut of harmonic well of %d, now search according to the eigenvector\n", ref_id);
+      }
 
       flag = 1;
       break;
@@ -859,7 +902,10 @@ int ARTn::find_saddle( )
   }
 
   if (! flag){
-    if (me == 0) fprintf(fp1, "Reach  max_iter_basin = %d. Could not get out of the harmonic well.\n\n", max_iter_basin);
+    if (me == 0){
+      fprintf(fp1, "\nReach  max_iter_basin = %d. Could not get out of the harmonic well.\n\n", max_iter_basin);
+      if (screen) fprintf(screen, "\nReach  max_iter_basin = %d. Could not get out of the harmonic well.\n\n", max_iter_basin);
+    }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1);
     myreset_vectors();
@@ -867,7 +913,14 @@ int ARTn::find_saddle( )
   }
   flag = 0;
 
-  if (me == 0) fprintf(fp1, "Step E-Eref  m_perp trial ftot fpar fperp eigen delr evalf a1\n");
+  if (me == 0){
+    fprintf(fp1, "\nNow to converge to the saddle point...\n");
+    fprintf(fp1, "Step E-Eref  m_perp trial ftot fpar fperp eigen delr evalf a1\n");
+    if (screen){
+      fprintf(screen, "\nNow to converge to the saddle point...\n");
+      fprintf(screen, "Step E-Eref  m_perp trial ftot fpar fperp eigen delr evalf a1\n");
+    }
+  }
 
   // now try to move close to the saddle point according to the eigenvector.
   int inc = 0;
@@ -969,14 +1022,22 @@ int ARTn::find_saddle( )
     MPI_Allreduce(&fperp2, &tmp,1,MPI_DOUBLE,MPI_SUM,world);
     fperp2 = tmp;
   
-    if (me == 0) fprintf(fp1, "%d %lg %d %d %g %g %g %g %g %d %g\n",
-    saddle_iter, ecurrent - eref, m_perp, trial, sqrt(ftotall), fpar2all, sqrt(fperp2), eigenvalue, sqrt(delr), evalf, hdotall);
+    if (me == 0){
+      fprintf(fp1, "%d %lg %d %d %g %g %g %g %g %d %g\n",
+      saddle_iter, ecurrent - eref, m_perp, trial, sqrt(ftotall), fpar2all, sqrt(fperp2), eigenvalue, sqrt(delr), evalf, hdotall);
+      if (screen) fprintf(screen, "%d %lg %d %d %g %g %g %g %g %d %g\n",
+      saddle_iter, ecurrent - eref, m_perp, trial, sqrt(ftotall), fpar2all, sqrt(fperp2), eigenvalue, sqrt(delr), evalf, hdotall);
+    }
    
    
     if (eigenvalue > eigen_th_fail){
       if (me == 0){
-        fprintf(fp1, "Failed to find the saddle point in Lanczos, as eigenvalue = %g > eigen_threshold = %g\n", eigenvalue, eigen_th_fail);
+        fprintf(fp1, "\nFailed to find the saddle point in Lanczos, as eigenvalue = %g > eigen_threshold = %g\n", eigenvalue, eigen_th_fail);
         fprintf(fp1, "Restart the search in another random direction...\n");
+        if (screen){
+          fprintf(screen, "\nFailed to find the saddle point in Lanczos, as eigenvalue = %g > eigen_threshold = %g\n", eigenvalue, eigen_th_fail);
+          fprintf(screen, "Restart the search in another random direction...\n");
+        }
       }
       for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   
@@ -984,7 +1045,10 @@ int ARTn::find_saddle( )
      }
   
     if (sqrt(ftotall) < force_th_saddle){
-      fprintf(fp1, "A new saddle point is reached.\n");
+      if (me == 0){
+        fprintf(fp1, "\nA new saddle point is reached.\n");
+        if (screen) fprintf(screen, "\nA new saddle point is reached.\n");
+      }
       return 1;
     }
   
@@ -993,8 +1057,14 @@ int ARTn::find_saddle( )
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
   }
 
-  fprintf(fp1, "Failed to find the saddle point in Lanczos steps till reaching the max Lanczos steps.\n");
-  fprintf(fp1, "Restart the search in another random direction...\n");
+  if (me == 0){
+    fprintf(fp1, "Failed to find the saddle point in Lanczos steps till reaching the max Lanczos steps.\n");
+    fprintf(fp1, "Restart the search in another random direction...\n");
+    if (screen){
+      fprintf(screen, "Failed to find the saddle point in Lanczos steps till reaching the max Lanczos steps.\n");
+      fprintf(screen, "Restart the search in another random direction...\n");
+    }
+  }
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   energy_force(1); myreset_vectors();
