@@ -32,17 +32,13 @@ private:
   int find_saddle();
   void read_control();
 
-  void global_random_move();
-  void group_random_move();
-  void local_random_move();
-  void local_region_random();
+  void random_kick();
 
   int check_saddle_min();
   void push_down();
   void check_new_min();
 
   void myreset_vectors();
-  //void center(double *, int );
   void reset_coords();
   void lanczos(bool , int , int);
   int min_perpendicular_fire(int );
@@ -52,7 +48,7 @@ private:
   DumpAtom * dumpsad;
   Compute *pressure;
 
-  int me;
+  int me, np;
   int vec_count;
   int evalf;
   bool eigen_vec_exist;
@@ -79,15 +75,17 @@ private:
   int max_num_events;      // Maximum number of events
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
-  int init_kick_mode;      // global_random; group_random; local_random; local_region
   int use_fire;            // use FIRE to do minimuzation in the perpendicular direction
   int flag_check_sad;      // Push back saddle point to check if it connect with the minimum
   double max_disp_tol;     // tolerance to claim as linked saddle
   int pressure_needed;     // Pressure will be calculated.
   double atom_move_cutoff; // cutoff to decide whether an atom is moved
-  double region_cutoff;    // region cutoff for local region random
-  char *groupname;
-  int groupbit;
+
+  int groupbit, ngroup;    // group bit & # of atoms for initial kick
+  int that, *glist;        // ID and list for kick
+  char *groupname;         // group name for initial kick
+  double kick_radius;      // radius for kick; <0, all; ==0, single; >0, cluster
+  double *delpos;
 
   // for harmonic well
   double init_step_size;   // Size of initial displacement
