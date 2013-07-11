@@ -7,9 +7,9 @@ CommandStyle(artn,ARTn)
 #ifndef ARTN_H
 #define ARTN_H
 
-#include "min_linesearch.h"
-#include "random_park.h"
 #include "dump_atom.h"
+#include "random_park.h"
+#include "min_linesearch.h"
 
 using namespace std;
 
@@ -26,11 +26,11 @@ public:
 private:
   void set_defaults();			
   void artn_init();
+  void read_control();
 
   int iterate(int );
   int min_converge(int);
   int find_saddle();
-  void read_control();
 
   void random_kick();
 
@@ -38,7 +38,7 @@ private:
   void push_down();
   void check_new_min();
 
-  void myreset_vectors();
+  void artn_reset_vec();
   void reset_coords();
   void lanczos(bool , int , int);
   int min_perpendicular_fire(int );
@@ -56,11 +56,11 @@ private:
   double eref;
 
   double eigenvalue;
-  double *eigenvector;
+  double *egvec;
   double *x0tmp;
   double *x00;
   double *htmp;
-  double *x_saddle;
+  double *x_sad;
   double *h_old;
   double *vvec;
   double *fperp;
@@ -68,24 +68,25 @@ private:
   int seed;
   RanPark *random;
 
+  // global control
   int max_conv_steps;
+  double temperature;      // Fictive temperature, if negative always reject the event
 
   // for art
-  double temperature;      // Fictive temperature, if negative always reject the event
   int max_num_events;      // Maximum number of events
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
   int use_fire;            // use FIRE to do minimuzation in the perpendicular direction
-  int flag_check_sad;      // Push back saddle point to check if it connect with the minimum
-  double max_disp_tol;     // tolerance to claim as linked saddle
-  int pressure_needed;     // Pressure will be calculated.
-  double atom_move_cutoff; // cutoff to decide whether an atom is moved
+  int flag_check_sad;      // if 1, will push back saddle point to check if it connect with the minimum
+  double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
+  int flag_press;          // Pressure will be calculated.
+  double atom_disp_thr;    // threshold to identify whether an atom is displaced or not
 
   int groupbit, ngroup;    // group bit & # of atoms for initial kick
   int that, *glist;        // ID and list for kick
   char *groupname;         // group name for initial kick
-  double kick_radius;      // radius for kick; <0, all; ==0, single; >0, cluster
-  double *delpos;
+  double cluster_radius;   // radius for kick; <0, all; ==0, single; >0, cluster
+  double *delpos;          // initial kick
 
   // for harmonic well
   double init_step_size;   // Size of initial displacement
@@ -97,8 +98,8 @@ private:
   double force_th_perp_h;  // Perpendicular force threhold in harmonic well
 
   // for lanczos
-  int num_lancz_vec_H;     // Number of vectors included in lanczos procedure in the Harmonic well
-  int num_lancz_vec_C;     // Number of vectors included in lanczos procedure in convergence
+  int num_lancz_vec_h;     // Number of vectors included in lanczos procedure in the Harmonic well
+  int num_lancz_vec_c;     // Number of vectors included in lanczos procedure in convergence
   double del_disp_lancz;   // Step of the numerical derivative of forces in lanczos
   double eigen_th_lancz;   // Eigen_threhold for lanczos convergence
 
@@ -106,7 +107,7 @@ private:
   double force_th_saddle;  // Threshold for convergence at saddle point
   double push_over_saddle; // Fraction of displacement over the saddle
   double eigen_th_fail;    // the eigen cutoff for failing in searching saddle point
-  double max_perp_moves_C; // Maximum number of perpendicular steps approaching saddle point
+  int    max_perp_moves_c; // Maximum number of perpendicular steps approaching saddle point
   double force_th_perp_sad;// Perpendicular force threhold approaching saddle point
 
   // for input
@@ -115,6 +116,7 @@ private:
   // for output
   FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
+  int log_level;           // 1, all; 0, main
 };
 
 }
