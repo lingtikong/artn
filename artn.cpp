@@ -26,7 +26,6 @@
 #include "math.h"
 
 #define MAXLINE 512
-#define MAXJACOBI 100
 
 using namespace LAMMPS_NS;
 
@@ -187,15 +186,12 @@ int ARTn::iterate(int maxevent)
   // print header of event log file
   if (me == 0){
     if (pressure_needed){
-      fprintf(fp2, "#       1           2      3     4     5    6       7   8   9  10  11  12   13     14              15\n");
+      fprintf(fp2, "#       1           2      3     4     5    6       7   8   9  10  11  12   13     14         15        16\n");
       fprintf(fp2, "# energy_barrier ref_id sad_id min_id eref emin n_moved pxx pyy pzz pxy pxz pyz efinal accept_or_reject dr\n");
     } else {
-      fprintf(fp2, "#       1           2      3    4      5     6       7       8             9 \n");
+      fprintf(fp2, "#       1           2      3    4      5     6       7       8        9         10\n");
       fprintf(fp2, "# energy_barrier ref_id sad_id min_id eref emin n_moved efinal accept_or_reject dr\n");
     }
-
-    fprintf(fp1, "Initial configuration (id = %d) was dumped out.\n", ref_id);
-    if (screen) fprintf(screen, "Initial configuration (id = %d) was dumped out.\n", ref_id);
   }
 
   int ievent = 0;
@@ -206,7 +202,7 @@ int ARTn::iterate(int maxevent)
       if(! check_saddle_min() ) continue;
     }
 
-    if (me == 0) fprintf(fp2, "%lg ", ecurrent - eref);
+    if (me == 0) fprintf(fp2, "%10.6f", ecurrent - eref);
 
     int idum = update->ntimestep;
     update->ntimestep = ++sad_id;
@@ -322,10 +318,10 @@ void ARTn::push_down()
   ecurrent = energy_force(1);
   if (me == 0){
     fprintf(fp1, "\nAfter push over the saddle point of %d, the current engergy becomes: %g\n", sad_id, ecurrent);
-    fprintf(fp1, "Now begin to minimize the configuration to reach another minimal.\n");
+    fprintf(fp1, "Now begin to minimize the configuration to reach another minimium.\n");
     if (screen){
       fprintf(screen, "\nAfter push over the saddle point of %d, the current engergy becomes: %g\n", sad_id, ecurrent);
-      fprintf(screen, "Now begin to minimize the configuration to reach another minimal.\n");
+      fprintf(screen, "Now begin to minimize the configuration to reach another minimium.\n");
     }
   }
 
@@ -363,7 +359,7 @@ return;
 void ARTn::check_new_min()
 {
   // output reference energy ,current energy and pressure.
-  if (me == 0) fprintf(fp2, " %d %d %d %lg %lg", ref_id, sad_id, min_id, eref, ecurrent);
+  if (me == 0) fprintf(fp2, " %5d %4d %5d %12.6f %12.6f", ref_id, sad_id, min_id, eref, ecurrent);
 
   double dr = 0., drall;
   double **x = atom->x;
@@ -388,7 +384,7 @@ void ARTn::check_new_min()
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   MPI_Allreduce(&n_moved,&n_movedall,1,MPI_DOUBLE,MPI_SUM,world);
-  if (me == 0) fprintf(fp2, " %d", n_movedall);
+  if (me == 0) fprintf(fp2, " %3d", n_movedall);
 
   drall = sqrt(drall);
 
@@ -402,7 +398,7 @@ void ARTn::check_new_min()
     pressure->compute_vector();
     double * press = pressure->vector;
 
-    if (me == 0) for (int i = 0; i < 6; ++i) fprintf(fp2, " %lg", press[i]);
+    if (me == 0) for (int i = 0; i < 6; ++i) fprintf(fp2, " %8.4f", press[i]);
   }
 
   // Metropolis
@@ -425,7 +421,7 @@ void ARTn::check_new_min()
     }
   }
   if (me == 0){
-    fprintf(fp2, " %lg %d %lg\n", ecurrent, acc, drall);
+    fprintf(fp2, " %12.6f %2d %8.5f\n", ecurrent, acc, drall);
     fflush(fp2);
   }
 
@@ -855,11 +851,11 @@ int ARTn::find_saddle( )
   ++evalf;
 
   if (me == 0){
-    fprintf(fp1, "\nBegin to search for the saddle point for config %d\n", ref_id);
-    fprintf(fp1, "Step E-Eref m_perp trial ftot    fpar      fperp   eigen    delr       evalf\n");
+    fprintf(fp1, "\nBegin to search for the saddle point from configuration %d\n", ref_id);
+    fprintf(fp1, "Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
     if (screen){
-      fprintf(screen, "\nBegin to search for the saddle point for config %d\n", ref_id);
-      fprintf(screen, "Step E-Eref m_perp trial ftot    fpar      fperp   eigen    delr       evalf\n");
+      fprintf(screen, "\nBegin to search for the saddle point from configuration %d\n", ref_id);
+      fprintf(screen, "Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
     }
   }
 
@@ -932,16 +928,16 @@ int ARTn::find_saddle( )
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
 
     if (me == 0){
-      fprintf(fp1, "%4d %.6f %3d %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8d\n", local_iter,
+      fprintf(fp1, "%4d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %8d\n", local_iter,
       ecurrent-eref, m_perp, trial, sqrt(ftotall), fpar2all, fperp2, eigenvalue, sqrt(delr), evalf);
-      if (screen) fprintf(screen, "%4d %.6f %3d %3d %8.4f %8.4f %8.4f %8.4f %8.4f %8d\n", local_iter,
+      if (screen) fprintf(screen, "%4d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %8d\n", local_iter,
       ecurrent-eref, m_perp, trial, sqrt(ftotall), fpar2all, fperp2, eigenvalue, sqrt(delr), evalf);
     }
 
     if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
 	   if (me == 0){
-        fprintf(fp1, "\nOut of harmonic well of %d, now search according to the eigenvector\n", ref_id);
-        if (screen) fprintf(screen, "\nOut of harmonic well of %d, now search according to the eigenvector\n", ref_id);
+        fprintf(fp1, "\nOut of harmonic well of %d, continue to search based on the eigenvector\n", ref_id);
+        if (screen) fprintf(screen, "\nOut of harmonic well of %d, continue to search based on the eigenvector\n", ref_id);
       }
 
       flag = 1;
@@ -964,11 +960,11 @@ int ARTn::find_saddle( )
   flag = 0;
 
   if (me == 0){
-    fprintf(fp1, "\nNow to converge to the saddle point...\n");
-    fprintf(fp1, "Step E-Eref  m_perp trial ftot fpar fperp eigen delr evalf a1\n");
+    fprintf(fp1, "\nNow to converge to the saddle point via Lanczos ...\n");
+    fprintf(fp1, "Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr       evalf    a1\n");
     if (screen){
-      fprintf(screen, "\nNow to converge to the saddle point...\n");
-      fprintf(screen, "Step E-Eref  m_perp trial ftot fpar fperp eigen delr evalf a1\n");
+      fprintf(screen, "\nNow to converge to the saddle point via Lanczos ...\n");
+      fprintf(screen, "Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr       evalf    a1\n");
     }
   }
 
@@ -1073,9 +1069,9 @@ int ARTn::find_saddle( )
     fperp2 = tmp;
   
     if (me == 0){
-      fprintf(fp1, "%d %lg %d %d %g %g %g %g %g %d %g\n",
+      fprintf(fp1, "%4d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %8d %10.5f\n",
       saddle_iter, ecurrent - eref, m_perp, trial, sqrt(ftotall), fpar2all, sqrt(fperp2), eigenvalue, sqrt(delr), evalf, hdotall);
-      if (screen) fprintf(screen, "%d %lg %d %d %g %g %g %g %g %d %g\n",
+      if (screen) fprintf(screen, "%4d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %8d %10.5f\n",
       saddle_iter, ecurrent - eref, m_perp, trial, sqrt(ftotall), fpar2all, sqrt(fperp2), eigenvalue, sqrt(delr), evalf, hdotall);
     }
    
@@ -1475,12 +1471,11 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
   beta_k_1 = sqrt(tmp);
 
   double eigen1 = 0., eigen2 = 0.;
+  char jobs = 'V';
   double *work, *z;
   long ldz = maxvec, info;
-  char jobs = 'V';
   z = new double [ldz*maxvec];
-  //printf("%ld %d\n", ldz, maxvec);
-  work = new double [2*maxvec+2];
+  work = new double [2*maxvec];
 
   // store origin configuration and force
   for (int i=0; i<nvec; i++){
@@ -1488,7 +1483,7 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     g[i] = fvec[i];
   }
 
-  for ( long n = 1; n <= maxvec; ++n){
+  for (long n = 1; n <= maxvec; ++n){
     for (int i = 0; i < nvec; ++i){
       q_k[i] = r_k_1[i] / beta_k_1;
       lanc[n-1][i] = q_k[i];
@@ -1533,10 +1528,10 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
       e_bak[i] = e[i];
     }
     if (n >= 2){
-      //printf("%c %d %d %d\n", jobs, n, ldz, info);
       dstev_(&jobs, &n, d_bak, e_bak, z, &ldz, work, &info);
-      //printf("%c %d %ld %ld\n", jobs, n, ldz, int(info));
-      if (info != 0) error->all(FLERR,"destev_ error in Lanczos subroute");
+
+      //for (int ii=0; ii<n; ii++) printf(" %g", d_bak[ii]); printf("\n");
+      if ((int)info != 0) error->all(FLERR,"destev_ error in Lanczos subroute");
 
       eigen1 = eigen2; eigen2 = d_bak[0];
     }
@@ -1702,111 +1697,4 @@ int ARTn::min_perpendicular_fire(int maxiter){
 return 0;
 }
 
-/* ----------------------------------------------------------------------
- * Private method, to compute all eigenvalues and eigenvectors of a real
- * symmetric matrix a[0..n-1][0..n-1]. On output, elements of a above
- * the diagonal are destroyed. d[0..n-1] returns the eigenvalues of a.
- * v[0..n-1][0..n-1] is a matrix whose columns contain, on output, the
- * normalized eigenvectors of a.
- * If maximum iteration is reached it exits and returns 1 instead of 0.
- *
- * Adapted from the Numerical Recipes in Fortran
- * --------------------------------------------------------------------*/
-int ARTn::Jacobi(double *mat, int n, double *egv, double *egvec)
-{
-  int i,j,k;
-  double tresh,theta,tau,t,sm,s,h,g,c;
-  double *b, *z;
-
-  b = new double [n];
-  z = new double [n];
-
-  for (i = 0; i < n; i++) {
-    for (j = 0; j < n; j++) egvec[i*n+j] = 0.;
-    egvec[i*n+i] = 1.0;
-  }
-  for (i = 0; i < n; i++) {
-    b[i] = egv[i] = mat[i*n+i];
-    z[i] = 0.;
-  }
-
-  for (int iter = 1; iter <= MAXJACOBI; iter++) {
-    sm = 0.0;
-    for (i = 0; i < n-1; i++)
-      for (j = i+1; j < n; j++) sm += fabs(mat[i*n+j]);
-    if (sm == 0.0){
-      for (i=0;i<n-1;i++) { // sort eigen value and eigen vectors
-        double p = egv[k=i];
-        for (j=i+1;j<n;j++) if (egv[j] < p) p = egv[k=j];
-        if (k != i) {
-          egv[k] = egv[i];
-          egv[i] = p;
-          for (j=0;j<n;j++) {
-            p = egvec[j*n+i];
-            egvec[j*n+i] = egvec[j*n+k];
-            egvec[j*n+k] = p;
-          }
-        }
-      }
-
-      delete []b;
-      delete []z;
-
-      return 0;
-    }
-
-    if (iter < 4) tresh = 0.2*sm/(n*n);
-    else tresh = 0.0;
-
-    for (i = 0; i < n-1; i++) {
-      for (j = i+1; j < n; j++) {
-        g = 100.0*fabs(mat[i*n+j]);
-        if (iter > 4 && fabs(egv[i])+g == fabs(egv[i])
-        && fabs(egv[j])+g == fabs(egv[j]))
-          mat[i*n+j] = 0.0;
-        else if (fabs(mat[i*n+j]) > tresh) {
-          h = egv[j]-egv[i];
-          if (fabs(h)+g == fabs(h)) t = (mat[i*n+j])/h;
-          else {
-            theta = 0.5*h/(mat[i*n+j]);
-            t = 1.0/(fabs(theta)+sqrt(1.0+theta*theta));
-            if (theta < 0.0) t = -t;
-          }
-          c = 1.0/sqrt(1.0+t*t);
-          s = t*c;
-          tau = s/(1.0+c);
-          h = t*mat[i*n+j];
-          z[i] -= h;
-          z[j] += h;
-          egv[i] -= h;
-          egv[j] += h;
-          mat[i*n+j] = 0.0;
-          for (k = 0;   k < i; k++) rotate(mat,k,i,k,j,s,tau);
-          for (k = i+1; k < j; k++) rotate(mat,i,k,k,j,s,tau);
-          for (k = j+1; k < n; k++) rotate(mat,i,k,j,k,s,tau);
-          for (k = 0;   k < n; k++) rotate(egvec,k,i,k,j,s,tau);
-        }
-      }
-    }
-   for (i = 0; i < n; i++) {
-      egv[i] = b[i] += z[i];
-      z[i] = 0.0;
-    }
-  }
-  delete []b;
-  delete []z;
-  return 1;
-}
-
-/* ----------------------------------------------------------------------
- * perform a single Jacobi rotation
- * ------------------------------------------------------------------- */
-void ARTn::rotate(double *mat, int i, int j, int k, int l,
-            double s, double tau)
-{
-  double g = mat[i*n+j];
-  double h = mat[k*n+l];
-  mat[i*n+j] = g-s*(h+g*tau);
-  mat[k*n+l] = h+s*(g-h*tau);
-}
-
+/* ---------------------------------------------------------------------- */
