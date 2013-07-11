@@ -26,6 +26,7 @@
 #include "math.h"
 
 #define MAXLINE 512
+#define ZERO  1.e-10
 
 using namespace LAMMPS_NS;
 
@@ -53,6 +54,8 @@ ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp)
   eigenvector = x0tmp = x00 = htmp = x_saddle = h_old = vvec = fperp = NULL;
 
   fp1 = fp2 = NULL;
+  glist = NULL;
+  delpos = NULL;
   groupname = fctrl = flog = fevent = fconfg = NULL;
 
   char *id_press = new char[13];
@@ -67,6 +70,7 @@ ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp)
   set_defaults();
 
   MPI_Comm_rank(world, &me);
+  MPI_Comm_size(world, &np);
 return;
 }
 
@@ -82,6 +86,9 @@ ARTn::~ARTn()
   if (fevent) delete [] fevent;
   if (fconfg) delete [] fconfg;
   if (groupname) delete [] groupname;
+
+  if (glist)  delete [] glist;
+  if (delpos) delete [] delpos;
 
   if (random) delete random;
   if (dumpmin) delete dumpmin;
@@ -141,6 +148,8 @@ void ARTn::command(int narg, char ** arg)
   update->whichflag = 0;
   update->firststep = update->laststep = 0;
   update->beginstep = update->endstep = 0;
+
+return;
 }
 
 /* -----------------------------------------------------------------------------
@@ -186,11 +195,11 @@ int ARTn::iterate(int maxevent)
   // print header of event log file
   if (me == 0){
     if (pressure_needed){
-      fprintf(fp2, "#       1           2      3     4     5    6       7   8   9  10  11  12   13     14         15        16\n");
-      fprintf(fp2, "# energy_barrier ref_id sad_id min_id eref emin n_moved pxx pyy pzz pxy pxz pyz efinal accept_or_reject dr\n");
+      fprintf(fp2, "#  1      2      3     4     5     6        7           8         9       10     11     12    13    14     15     16      17     18\n");
+      fprintf(fp2, "#Event  del-E   ref   sad   min  center    Eref        Emin      nMove    pxx    pyy    pzz   pxy   pxz    pyz   Efinal  status  dr\n");
     } else {
-      fprintf(fp2, "#       1           2      3    4      5     6       7       8        9         10\n");
-      fprintf(fp2, "# energy_barrier ref_id sad_id min_id eref emin n_moved efinal accept_or_reject dr\n");
+      fprintf(fp2, "#  1      2      3     4     5     6        7           8         9       10       11    12\n");
+      fprintf(fp2, "#Event  del-E   ref   sad   min  center    Eref        Emin      nMove  Efinal    status dr\n");
     }
   }
 
@@ -202,7 +211,7 @@ int ARTn::iterate(int maxevent)
       if(! check_saddle_min() ) continue;
     }
 
-    if (me == 0) fprintf(fp2, "%10.6f", ecurrent - eref);
+    if (me == 0) fprintf(fp2, "%4d %10.6f", ievent, ecurrent - eref);
 
     int idum = update->ntimestep;
     update->ntimestep = ++sad_id;
@@ -359,7 +368,7 @@ return;
 void ARTn::check_new_min()
 {
   // output reference energy ,current energy and pressure.
-  if (me == 0) fprintf(fp2, " %5d %4d %5d %12.6f %12.6f", ref_id, sad_id, min_id, eref, ecurrent);
+  if (me == 0) fprintf(fp2, " %5d %4d %5d %6d %12.6f %12.6f", ref_id, sad_id, min_id, that, eref, ecurrent);
 
   double dr = 0., drall;
   double **x = atom->x;
@@ -398,11 +407,14 @@ void ARTn::check_new_min()
     pressure->compute_vector();
     double * press = pressure->vector;
 
-    if (me == 0) for (int i = 0; i < 6; ++i) fprintf(fp2, " %8.4f", press[i]);
+    if (me == 0) for (int i = 0; i < 6; ++i) fprintf(fp2, " %10.f", press[i]);
   }
 
   // Metropolis
-  int acc = temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature));
+  int acc;
+  if (me == 0) acc = temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature));
+  MPI_Bcast(&acc,1,MPI_INT,me,world);
+
   if (acc){
     ref_id = min_id; eref = ecurrent;
     if (me == 0){
@@ -434,8 +446,7 @@ return;
 void ARTn::set_defaults()
 {
   seed = 12345;
-  init_kick_mode    = 0;
-  ref_id = min_id = sad_id    = 0;
+  ref_id = min_id = sad_id = 0;
 
   max_conv_steps    = 100000;
 
@@ -449,7 +460,7 @@ void ARTn::set_defaults()
   max_disp_tol      = 0.1;
   pressure_needed   = 0;
   atom_move_cutoff  = 0.1;
-  region_cutoff     = 5.0;
+  kick_radius       = 5.0;
 
   // for harmonic well
   init_step_size    = 0.05;
@@ -461,7 +472,6 @@ void ARTn::set_defaults()
   force_th_perp_h   = 0.5;
 
   // for lanczos
-  //num_lancz_vec_H = 13;
   num_lancz_vec_H   = 40;
   num_lancz_vec_C   = 12;
   del_disp_lancz    = 0.01;
@@ -526,15 +536,8 @@ void ARTn::read_control()
       increment_size = atof(token2);
       if (increment_size <= 0.) error->all(FLERR, "increment_size must be greater than 0.");
 
-    } else if (strcmp(token1, "init_kick_mode") == 0){
-      if (strcmp(token2, "global_random") == 0) init_kick_mode = 0;
-      else if (strcmp(token2, "group_random") == 0) init_kick_mode = 1;
-      else if (strcmp(token2, "local_random") == 0) init_kick_mode = 2;
-      else init_kick_mode = 3;
-
-    } else if (!strcmp(token1, "region_cutoff")){
-      region_cutoff = atof(token2);
-      if (region_cutoff <= 0.) error->all(FLERR, "region_cutoff must be greater than 0.");
+    } else if (!strcmp(token1, "cluster_radius")){
+      kick_radius = atof(token2);
 
     } else if (strcmp(token1, "group_name") == 0){
       if (groupname) delete [] groupname;
@@ -671,16 +674,18 @@ void ARTn::read_control()
   }
   min_id = ref_id;
 
-  // if group info needed, check its validity
-  if (init_kick_mode == 1){
-    if (groupname == NULL){ groupname = new char [4]; strcpy(groupname, "all");}
-    int igroup = group->find(groupname);
-    if (igroup == -1){
-      sprintf(str, "can not find ARTn group: %s", groupname);
-      error->all(FLERR, str);
-    }
-    groupbit = group->bitmask[igroup];
+  // default group name is all
+  if (groupname == NULL){ groupname = new char [4]; strcpy(groupname, "all");}
+
+  int igroup = group->find(groupname);
+
+  if (igroup == -1){
+    sprintf(str, "can not find ARTn group: %s", groupname);
+    error->all(FLERR, str);
   }
+  groupbit = group->bitmask[igroup];
+  ngroup = group->count(igroup);
+  if (ngroup < 1) error->all(FLERR, "No atom is found in your desired group for activation!");
 
   // open files and output log file
   if (me == 0){
@@ -704,11 +709,8 @@ void ARTn::read_control()
     fprintf(fp1, "max_num_events    %20d  # %s\n", max_num_events,"max number of events");
     fprintf(fp1, "max_activat_iter  %20d  # %s\n", max_activat_iter, "Maximum # of iteraction for reaching the saddle point");
     fprintf(fp1, "increment_size    %20g  # %s\n", increment_size, "Overall scale for the increment moves");
-    fprintf(fp1, "init_kick_mode    %20d  # %s\n", init_kick_mode, "global random; group random; local random; local region");
-    fprintf(fp1, "region_cutoff     %20g  # %s\n", region_cutoff, "The region cutoff for local region random");
-    if (init_kick_mode == 1){
-      fprintf(fp1, "group_name        %20s  # %s\n", groupname, "The name of the group that will be kicked.");
-    }
+    fprintf(fp1, "group_name        %20s  # %s\n", groupname, "The name of the group that will be kicked.");
+    fprintf(fp1, "cluster_radius    %20g  # %s\n", kick_radius, "The region cutoff for local region random");
     fprintf(fp1, "\n");
     fprintf(fp1, "init_step_size    %20g  # %s\n", init_step_size, "Size of initial displacement");
     fprintf(fp1, "basin_factor      %20g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
@@ -775,12 +777,12 @@ return;
  * ---------------------------------------------------------------------------*/
 void ARTn::artn_init()
 {
-  random = new RanPark(lmp, seed);
+  random = new RanPark(lmp, seed+me);
 
   evalf = 0;
   eigen_vec_exist = 0;
   if (nvec) vvec = atom->v[0];
-
+  memory->create(delpos, nvec, "delpos");
 
   // peratom vector I use
   vec_count = 3;
@@ -803,6 +805,32 @@ void ARTn::artn_init()
   ++vec_count;
   x_saddle =fix_minimize->request_vector(vec_count);    //9
   ++vec_count;
+
+  // group list
+  int *tag  = atom->tag;
+  int *mask = atom->mask;
+  int nlocal = atom->nlocal;
+  int * llist; memory->create(llist, MAX(1,nlocal), "llist");
+
+  int n = 0;
+  for (int i = 0; i < nlocal; i++) if (mask[i] & groupbit) llist[n++] = tag[i];
+
+  bigint nsingle = n;
+  bigint nall;
+  MPI_Allreduce(&nsingle,&nall,1,MPI_LMP_BIGINT,MPI_SUM,world);
+
+  if (me == 0) memory->create(glist, ngroup, "glist");
+  //else memory->create(glist, 1, "glist");
+  int *disp = new int [np];
+  int *recv = new int [np];
+  for (int i=0; i < np; i++) disp[i] = recv[i] = 0;
+  MPI_Gather(&nsingle,1,MPI_INT,recv,1,MPI_INT,0,world);
+  for (int i=1; i < np; i++) disp[i] = disp[i-1] + recv[i-1];
+
+  MPI_Gatherv(llist,nsingle,MPI_INT,glist,recv,disp,MPI_INT,0,world);
+  delete [] disp;
+  delete [] recv;
+  memory->destroy(llist);
 
 return;
 }
@@ -835,26 +863,25 @@ int ARTn::find_saddle( )
   double step, preenergy;
   double tmp;
   int m_perp = 0, trial = 0, nfail = 0;
+
   eigenvalue = 0.;
   eigen_vec_exist = 0;
 
   for (int i = 0; i < nvec; i++) x0[i] = x00[i] = xvec[i];
 
   // random move choose
-  if      (init_kick_mode == 0) global_random_move();
-  else if (init_kick_mode == 1) group_random_move();
-  else if (init_kick_mode == 2) local_random_move();
-  else local_region_random();
+  random_kick();
 
   ecurrent = energy_force(1);
   myreset_vectors();
   ++evalf;
 
   if (me == 0){
-    fprintf(fp1, "\nBegin to search for the saddle point from configuration %d\n", ref_id);
+    fprintf(fp1, "Begin to search for the saddle point from configuration %d\n", ref_id);
     fprintf(fp1, "Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
+    fflush(fp1);
     if (screen){
-      fprintf(screen, "\nBegin to search for the saddle point from configuration %d\n", ref_id);
+      fprintf(screen, "Begin to search for the saddle point from configuration %d\n", ref_id);
       fprintf(screen, "Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
     }
   }
@@ -1137,10 +1164,9 @@ void ARTn::reset_coords()
     dz = dz0 = x[i][2] - x0[n+2];
     domain->minimum_image(dx,dy,dz);
 
-    // KLT: it is quite impractical to compare = for floats
-    if (dx != dx0) x0[n] = x[i][0] - dx;
-    if (dy != dy0) x0[n+1] = x[i][1] - dy;
-    if (dz != dz0) x0[n+2] = x[i][2] - dz;
+    if (abs(dx - dx0) > ZERO) x0[n]   = x[i][0] - dx;
+    if (abs(dy - dy0) > ZERO) x0[n+1] = x[i][1] - dy;
+    if (abs(dz - dz0) > ZERO) x0[n+2] = x[i][2] - dz;
     n += 3;
   }
 
@@ -1149,47 +1175,82 @@ void ARTn::reset_coords()
 return;
 }
 
-/* -----------------------------------------------------------------------------
- * give a global random delta_x 
- * ---------------------------------------------------------------------------*/
-void ARTn::global_random_move()
-{
-  double *delpos = new double [nvec];
-  double norm = 0.;
-  for (int i=0; i < nvec; i++) delpos[i] = 0.5-random->uniform();
-
-  for (int i=0; i < nvec; i++) norm += delpos[i] * delpos[i];
-
-  double normall;
-  MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
-
-  double norm_i = 1./sqrt(normall);
-  for (int i=0; i < nvec; i++){
-    h[i] = delpos[i] * norm_i;
-    xvec[i] += init_step_size * h[i];
-  }
-
-  delete []delpos;
-return;
-}
-
 /* ------------------------------------------------------------------------------
- * give a group random delta_x
+ * random kick atoms in the defined group and radius
  * ----------------------------------------------------------------------------*/
-void ARTn::group_random_move()
+void ARTn::random_kick()
 {
-  double *delpos = new double [nvec];
+  // define the central atom that will be kicked
+  if (me == 0){
+    int index = int(random->uniform()*double(ngroup+1))%ngroup;
+    that = glist[index];
+
+    fprintf(fp1, "\nThe activation is centered on atom: %d", that);
+    if (screen) fprintf(screen, "\nThe activation is centered on atom: %d", that);
+  }
+  MPI_Bcast(&that,1,MPI_INT,me,world);
+
+  double cord[3];
+
+  memory->grow(delpos, nvec, "delpos");
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
-  double norm = 0.;
   int nlocal = atom->nlocal;
-  for (int i = 0; i < nlocal; ++i){
-    if (groupbit & atom->mask[i]){
-      delpos[i*3]   = 0.5 - random->uniform();
-      delpos[i*3+1] = 0.5 - random->uniform();
-      delpos[i*3+2] = 0.5 - random->uniform();
+  int *tag   = atom->tag;
+  int nhit = 0;
+
+  if (abs(kick_radius) < ZERO){ // only the cord atom will be kicked
+    for (int i = 0; i<nlocal; i++){
+      if (tag[i] == that){
+        delpos[i*3]   = 0.5 - random->uniform();
+        delpos[i*3+1] = 0.5 - random->uniform();
+        delpos[i*3+2] = 0.5 - random->uniform();
+
+        nhit++; break;
+      }
+    }
+
+  } else if (kick_radius < 0.){ // all atoms in group will be kicked
+    for (int i = 0; i < nlocal; i++){
+      if (groupbit & atom->mask[i]){
+        delpos[i*3]   = 0.5 - random->uniform();
+        delpos[i*3+1] = 0.5 - random->uniform();
+        delpos[i*3+2] = 0.5 - random->uniform();
+
+        nhit++;
+      }
+    }
+
+  } else { // only atoms in group and within a radius to the central atom will be kicked
+    double one[3]; one[0] = one[1] = one[2] = 0.;
+    for (int i = 0; i < nlocal; i++){
+      if (tag[i] == that){
+        one[0] = atom->x[i][0];
+        one[1] = atom->x[i][1];
+        one[2] = atom->x[i][2];
+      }
+    }
+    MPI_Allreduce(&one[0], &cord[0], 3, MPI_DOUBLE, MPI_SUM, world);
+    double rcut2 = kick_radius * kick_radius;
+    for (int i = 0; i < nlocal; i++){
+      if (groupbit & atom->mask[i]){
+        double dx = atom->x[i][0] - cord[0];
+        double dy = atom->x[i][1] - cord[1];
+        double dz = atom->x[i][2] - cord[2];
+        domain->minimum_image(dx, dy, dz);
+        double r2 = dx*dx + dy*dy + dz*dz;
+        if (r2 <= rcut2){
+          delpos[i*3]   = 0.5 - random->uniform();
+          delpos[i*3+1] = 0.5 - random->uniform();
+          delpos[i*3+2] = 0.5 - random->uniform();
+
+          nhit++;
+        }
+      }
     }
   }
 
+  // now normalize and apply the kick to the selected atom(s)
+  double norm = 0.;
   for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
   double normall;
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
@@ -1199,111 +1260,13 @@ void ARTn::group_random_move()
     h[i] = delpos[i] * norm_i;
     xvec[i] += init_step_size * h[i];
   }
-  delete []delpos;
 
-return;
-}
-
-/* -----------------------------------------------------------------------------
- * move one atom randomly
- * ---------------------------------------------------------------------------*/
-void ARTn::local_random_move()
-{
-  double *delpos = new double[nvec];
-  for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
-  double norm = 0.;
-
-  int natoms = atom->natoms;
-  int that_atom = floor(natoms * random->uniform());
-  if (that_atom == natoms) that_atom -= 1;
-  else that_atom += 1;
-
-  int *tag = atom->tag;
-  int nlocal = atom->nlocal;
-  int flag = 0, flagall = 0;
-  for (int i = 0; i < nlocal; ++i){
-    if (that_atom == tag[i]){
-      flag = 1;
-      delpos[i*3]   = 0.5 - random->uniform();
-      delpos[i*3+1] = 0.5 - random->uniform();
-      delpos[i*3+2] = 0.5 - random->uniform();
-    }
+  int nkick;
+  MPI_Reduce(&nhit,&nkick,1,MPI_INT,MPI_SUM,0,world);
+  if (me == 0){
+    fprintf(fp1, ", total # of atoms kicked: %d\n", nkick);
+    if (screen) fprintf(screen, ", total # of atoms kicked: %d\n", nkick);
   }
-
-  for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
-  double normall;
-  MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
-  MPI_Allreduce(&flag,&flagall,1,MPI_DOUBLE,MPI_SUM,world);
-
-  if (flagall == 0) error->all(FLERR,"local random move error, atom not found.");
-
-  double norm_i = 1./sqrt(normall);
-  for (int i=0; i < nvec; i++){
-    h[i] = delpos[i] * norm_i;
-    xvec[i] += init_step_size * h[i];
-  }
-  delete []delpos;
-
-return;
-}
-
-/* -----------------------------------------------------------------------------
- * local region random
- * ---------------------------------------------------------------------------*/
-void ARTn::local_region_random()
-{
-  double *delpos = new double[nvec];
-  for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
-  double norm = 0., normall;
-  double coords[3] = {0., 0., 0.};
-  double coordsall[3];
-  double **x = atom->x;
-  int natoms = atom->natoms;
-  int that_atom = floor(natoms * random->uniform());
-  if (that_atom == natoms) that_atom -= 1;
-  else that_atom += 1;
-
-  int *tag = atom->tag;
-  int nlocal = atom->nlocal;
-  int flag = 0, flagall = 0;
-  for (int i = 0; i < nlocal; ++i){
-    if (that_atom == tag[i]){
-      flag = 1;
-      coords[0] = x[i][0];
-      coords[1] = x[i][1];
-      coords[2] = x[i][2];
-    }
-  }
-  MPI_Allreduce(&flag,&flagall,1,MPI_DOUBLE,MPI_SUM,world);
-  MPI_Allreduce(coords,coordsall,3,MPI_DOUBLE,MPI_SUM,world);
-  if (flagall == 0) {
-    error->all(FLERR,"Local region random error, atom not found.");
-  } else if (flagall > 1){
-    error->all(FLERR,"Local region random error, too many atom found.");
-  }
-
-  double delta_r = 0.;
-  double cutoff2 = region_cutoff * region_cutoff;
-  for (int i = 0; i < nlocal; ++i){
-    delta_r = (x[i][0] - coordsall[0]) * (x[i][0] - coordsall[0])
-            + (x[i][1] - coordsall[1]) * (x[i][1] - coordsall[1])
-            + (x[i][2] - coordsall[2]) * (x[i][2] - coordsall[2]);
-
-    if (delta_r < cutoff2) {
-      delpos[i*3]   = 0.5 - random->uniform();
-      delpos[i*3+1] = 0.5 - random->uniform();
-      delpos[i*3+2] = 0.5 - random->uniform();
-    }
-  }
-  for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
-  MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
-  double norm_i = 1./sqrt(normall);
-
-  for (int i=0; i < nvec; i++){
-    h[i] = delpos[i] * norm_i;
-    xvec[i] += init_step_size * h[i];
-  }
-  delete []delpos;
 
 return;
 }
@@ -1387,37 +1350,10 @@ int ARTn::min_converge(int maxiter)
     if (dotall[0] <= 0.0) {
       for (i = 0; i < nvec; i++) h[i] = g[i];
     }
-
-    // output
-    // for
-    // thermo,
-    // dump,
-    // restart
-    // files
-
-    //if (output->next == ntimestep) {
-    //  timer->stamp();
-    //  //output->write(ntimestep);
-    //  timer->stamp(TIME_OUTPUT);
-    //}
   }
 
 return MAXITER;
 }
-
-/* -----------------------------------------------------------------------------
- * center the vector: Warining: no MPI_SUM is used.
- * ---------------------------------------------------------------------------*/
-/*
-void ARTn::center(double * x, int n)
-{
-  double sum = 0.;
-  for (int i=0; i<n; i++) sum += x[i];
-
-  sum /= double(n);
-  for (int i=0; i<n; i++) x[i] -= sum;
-}
-*/
 
 /* -----------------------------------------------------------------------------
  * The lanczos method to get the lowest eigenvalue and corresponding eigenvector
@@ -1530,7 +1466,6 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     if (n >= 2){
       dstev_(&jobs, &n, d_bak, e_bak, z, &ldz, work, &info);
 
-      //for (int ii=0; ii<n; ii++) printf(" %g", d_bak[ii]); printf("\n");
       if ((int)info != 0) error->all(FLERR,"destev_ error in Lanczos subroute");
 
       eigen1 = eigen2; eigen2 = d_bak[0];
