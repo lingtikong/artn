@@ -117,10 +117,6 @@ private:
   // for output
   FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
-
-  // private method, to get the eigen value of a symmetric matrix
-  int Jacobi(double *, const int, double *, double *);
-  void rotate(double *, int, int, int, int, double, double);
 };
 
 }
