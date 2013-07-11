@@ -77,14 +77,17 @@ private:
   // for art
   double temperature;      // Fictive temperature, if negative always reject the event
   int max_num_events;      // Maximum number of events
-  int max_activat_iter;    // Maximum number of iteraction for reaching the saddle point
+  int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
-  int init_kick_mode;      // global random; group random; local random; local region
+  int init_kick_mode;      // global_random; group_random; local_random; local_region
   int use_fire;            // use FIRE to do minimuzation in the perpendicular direction
   int flag_check_sad;      // Push back saddle point to check if it connect with the minimum
+  double max_disp_tol;     // tolerance to claim as linked saddle
   int pressure_needed;     // Pressure will be calculated.
   double atom_move_cutoff; // cutoff to decide whether an atom is moved
   double region_cutoff;    // region cutoff for local region random
+  char *groupname;
+  int groupbit;
 
   // for harmonic well
   double init_step_size;   // Size of initial displacement
@@ -112,8 +115,12 @@ private:
   char *fctrl;
 
   // for output
-  FILE *fp1, *fp2, *fp3;
+  FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
+
+  // private method, to get the eigen value of a symmetric matrix
+  int Jacobi(double *, const int, double *, double *);
+  void rotate(double *, int, int, int, int, double, double);
 };
 
 }
