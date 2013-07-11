@@ -43,7 +43,7 @@ private:
   void lanczos(bool , int , int);
   int min_perpendicular_fire(int );
 
-  int ref_id, min_id, sad_id;
+  int ref_id, min_id, sad_id, ref_0;
   DumpAtom * dumpmin;
   DumpAtom * dumpsad;
   Compute *pressure;
@@ -73,6 +73,7 @@ private:
   double temperature;      // Fictive temperature, if negative always reject the event
 
   // for art
+  int nattempt;
   int max_num_events;      // Maximum number of events
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
@@ -117,6 +118,8 @@ private:
   FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
   int log_level;           // 1, all; 0, main
+
+  void artn_stat();
 };
 
 }
