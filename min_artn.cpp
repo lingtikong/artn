@@ -131,6 +131,7 @@ int MinARTn::iterate(int maxevent)
     }
   }
 
+  int ievent = 0;
   while ( 1 ){
     nattempt++;
     while (! find_saddle() ) nattempt++;
@@ -138,7 +139,7 @@ int MinARTn::iterate(int maxevent)
       if(! check_saddle_min() ) continue;
     }
 
-    if (me == 0 && fp2) fprintf(fp2, "%4d %10.6f", niter+1, ecurrent - eref);
+    if (me == 0 && fp2) fprintf(fp2, "%4d %10.6f", ievent+1, ecurrent - eref);
 
     sad_id++;
     if (dumpsad){
@@ -158,7 +159,7 @@ int MinARTn::iterate(int maxevent)
       timer->stamp(TIME_OUTPUT);
     }
 
-    if (++niter >= max_num_events) break;
+    if (++ievent >= max_num_events) break;
   }
 
   // finalize ARTn
@@ -736,6 +737,8 @@ void MinARTn::artn_init()
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
+  fix_minimize->add_vector(3);
+  fix_minimize->add_vector(3);
   x0tmp = fix_minimize->request_vector(vec_count++);	//3
   h_old = fix_minimize->request_vector(vec_count++);	//4
   egvec = fix_minimize->request_vector(vec_count++);  //5
@@ -820,17 +823,17 @@ int MinARTn::find_saddle( )
     if (fp1){
       fprintf(fp1, "  Stage 1, search for the saddle from configuration %d\n", ref_id);
       if (log_level){
-        fprintf(fp1, "  ------------------------------------------------------------------------------------------\n");
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
         fprintf(fp1, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
-        fprintf(fp1, "  ------------------------------------------------------------------------------------------\n");
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       }
       fflush(fp1);
     }
     if (screen){
       fprintf(screen, "  Stage 1, search for the saddle from configuration %d\n", ref_id);
-      fprintf(screen, "  ------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(screen, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr       evalf\n");
-      fprintf(screen, "  ------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
     }
   }
 
@@ -912,11 +915,11 @@ int MinARTn::find_saddle( )
 		if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
 			 if (me == 0){
               if (fp1){
-                if (log_level) fprintf(fp1, "  ------------------------------------------------------------------------------------------\n");
+                if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
 				    fprintf(fp1, "  Stage 1 succeeded, continue searching based on eigen-vector.\n");
               }
 				  if (screen){
-                fprintf(screen, "  ------------------------------------------------------------------------------------------\n");
+                fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
                 fprintf(screen, "  Stage 1 succeeded, continue searching based on eigen-vector.\n");
               }
 			 }
@@ -930,11 +933,11 @@ int MinARTn::find_saddle( )
   if (! flag){
     if (me == 0){
       if (fp1){
-        if (log_level) fprintf(screen, "  ------------------------------------------------------------------------------------------\n");
+        if (log_level) fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
         fprintf(fp1, "  Stage 1 failed, cannot get out of the harmonic well after %d steps.\n\n", max_iter_basin);
       }
       if (screen){
-        fprintf(screen, "  ------------------------------------------------------------------------------------------\n");
+        fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
         fprintf(screen, "  Stage 1 failed, cannot get out of the harmonic well after %d steps.\n\n", max_iter_basin);
       }
     }
@@ -1272,6 +1275,7 @@ int MinARTn::min_converge(int maxiter)
   gg = fnorm_sqr();
   ntimestep = 0;
 
+  niter = 0;
   for (int iter = 0; iter < maxiter; iter++) {
     //ntimestep = ++update->ntimestep;
     ++ ntimestep;
@@ -1496,8 +1500,9 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   delete []e_bak;
   delete []z;
   delete []work;
-  modify->delete_fix("lanczos");
   delete []lanc;
+
+  modify->delete_fix("lanczos");
 
 return;
 }
@@ -1521,9 +1526,9 @@ int MinARTn::min_perpendicular_fire(int maxiter){
   double scale1, scale2;
   double alpha;
   int last_negative = 0.;
-  for (int i = 0; i < nvec; ++i) {
-    vvec[i] = 0.;
-  }
+
+  for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
+
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
     fdoth = 0.;
@@ -1622,11 +1627,11 @@ void MinARTn::artn_final()
     if (fp1){
       fprintf(fp1, "\n");
       fprintf(fp1, "==========================================================================================\n");
-      fprintf(fp1, "# Total number of ARTn attempts: %d\n", nattempt);
-      fprintf(fp1, "# Number of new saddle found   : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
-      fprintf(fp1, "# Number of new minimumi found : %d\n", min_id-ref_0);
-      fprintf(fp1, "# Number of accepted minima    : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
-      fprintf(fp1, "# Number of force evaluation   : %d\n", evalf);
+      fprintf(fp1, "# Total number of ARTn attempts : %d\n", nattempt);
+      fprintf(fp1, "# Number of new saddle found    : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
+      fprintf(fp1, "# Number of new minimumi found  : %d\n", min_id-ref_0);
+      fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(fp1, "# Number of force evaluation    : %d\n", evalf);
       fprintf(fp1, "==========================================================================================\n");
       fclose(fp1);
     }
@@ -1636,11 +1641,11 @@ void MinARTn::artn_final()
     if (screen){
       fprintf(screen, "\n");
       fprintf(screen, "==========================================================================================\n");
-      fprintf(screen, "# Total number of ARTn attempts: %d\n", nattempt);
-      fprintf(screen, "# Number of new saddle found   : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
-      fprintf(screen, "# Number of new minimumi found : %d\n", min_id-ref_0);
-      fprintf(screen, "# Number of accepted minima    : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
-      fprintf(screen, "# Number of force evaluation   : %d\n", evalf);
+      fprintf(screen, "# Total number of ARTn attempts : %d\n", nattempt);
+      fprintf(screen, "# Number of new saddle found    : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
+      fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
+      fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(screen, "# Number of force evaluation    : %d\n", evalf);
       fprintf(screen, "==========================================================================================\n");
     }
   }
