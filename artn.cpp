@@ -169,7 +169,9 @@ int ARTn::iterate(int maxevent)
   }
 
   stop_condition = min_converge(max_conv_steps);
+  evalf += neval;
   eref = ecurrent = energy_force(0);
+  ++evalf;
   stopstr = stopstrings(stop_condition);
 
   if (me == 0 && fp1){
@@ -266,7 +268,7 @@ int ARTn::check_saddle_min()
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps);
   stopstr = stopstrings(stop_condition);
-  ecurrent = energy_force(1);
+  ecurrent = energy_force(0);
   artn_reset_vec();
   // output minimization information
   if (me == 0 && fp1){
@@ -344,7 +346,7 @@ void ARTn::push_down()
   stop_condition = min_converge(max_conv_steps);
   stopstr = stopstrings(stop_condition);
 
-  ecurrent = energy_force(1);
+  ecurrent = energy_force(0);
   artn_reset_vec();
 
   // output minimization information
@@ -1013,6 +1015,7 @@ int ARTn::find_saddle( )
     }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1);
+    ++evalf;
     artn_reset_vec();
     return 0;
   }
@@ -1039,6 +1042,7 @@ int ARTn::find_saddle( )
   int inc = 0;
   for (int saddle_iter = 0; saddle_iter < max_activat_iter; ++saddle_iter){
     ecurrent = energy_force(1);
+    ++evalf;
     artn_reset_vec();
     for (int i = 0; i < nvec; ++i) h_old[i] = h[i];
 
@@ -1191,6 +1195,7 @@ int ARTn::find_saddle( )
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   energy_force(1); artn_reset_vec();
+  ++evalf;
 
 return 0;
 }
@@ -1479,6 +1484,7 @@ void ARTn::lanczos(bool new_projection, int flag, int maxvec){
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i] + q_k[i] * DEL_LANCZOS;
 
     energy_force(1);
+    ++evalf;
     reset_coords();
     r_k_1 = fix_lanczos->request_vector(0);
     q_k_1 = fix_lanczos->request_vector(1);
@@ -1695,6 +1701,7 @@ void ARTn::artn_stat()
       fprintf(fp1, "# Number of new saddle found   : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(fp1, "# Number of new minimumi found : %d\n", min_id-ref_0);
       fprintf(fp1, "# Number of accepted minima    : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(fp1, "# Number of force evaluation   : %d\n", evalf);
       fprintf(fp1, "==========================================================================================\n");
     }
    
@@ -1705,6 +1712,7 @@ void ARTn::artn_stat()
       fprintf(screen, "# Number of new saddle found   : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of new minimumi found : %d\n", min_id-ref_0);
       fprintf(screen, "# Number of accepted minima    : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(screen, "# Number of force evaluation   : %d\n", evalf);
       fprintf(screen, "==========================================================================================\n");
     }
   }
