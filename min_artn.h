@@ -1,6 +1,6 @@
-#ifdef COMMAND_CLASS
+#ifdef MINIMIZE_CLASS
 
-CommandStyle(artn,ARTn)
+MinimizeStyle(artn,MinARTn)
 
 #else
 
@@ -15,20 +15,16 @@ using namespace std;
 
 namespace LAMMPS_NS {
 
-class ARTn: public MinLineSearch {
+class MinARTn: public MinLineSearch {
 public:
-  ARTn(class LAMMPS *);
-  ~ARTn();
-
-  int search(int );
-  void command(int, char **);
+  MinARTn(class LAMMPS *);
+  int iterate(int);
 
 private:
   void set_defaults();			
   void artn_init();
   void read_control();
 
-  int iterate(int );
   int min_converge(int);
   int find_saddle();
 
@@ -111,15 +107,12 @@ private:
   int    max_perp_moves_c; // Maximum number of perpendicular steps approaching saddle point
   double force_th_perp_sad;// Perpendicular force threhold approaching saddle point
 
-  // for input
-  char *fctrl;
-
   // for output
   FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
   int log_level;           // 1, all; 0, main
 
-  void artn_stat();
+  void artn_final();
 };
 
 }

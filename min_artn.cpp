@@ -1,21 +1,17 @@
 /*---------------------------------------------------
   Some features of this code are writtern according to
-  Norman's Code version 3.0 ARTn. The explanlation of 
+  Norman's Code version 3.0 MinARTn. The explanlation of 
   the parameters I used here can be found in the doc of
   his code.
   This code don't do minimizing include extra peratom dof or 
   extra global dof.
 ----------------------------------------------------*/
-#include "minimize.h"
-#include "string.h"
-#include "min_cg.h"
+#include "min_artn.h"
 #include "atom.h"
 #include "domain.h"
 #include "update.h"
-#include "finish.h"
 #include "timer.h"
 #include "error.h"
-#include "artn.h"
 #include "modify.h"
 #include "fix_minimize.h"
 #include "memory.h"
@@ -24,6 +20,7 @@
 #include "force.h"
 #include "group.h"
 #include "math.h"
+#include "output.h"
 
 #define MAXLINE 512
 #define ZERO  1.e-10
@@ -46,7 +43,7 @@ enum{MAXITER,MAXEVAL,ETOL,FTOL,DOWNHILL,ZEROALPHA,ZEROFORCE,ZEROQUAD};
 /* -----------------------------------------------------------------------------
  * Constructor of ARTn
  * ---------------------------------------------------------------------------*/
-ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp)
+MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 {
   random = NULL;
   pressure = NULL;
@@ -56,7 +53,7 @@ ARTn::ARTn(LAMMPS *lmp): MinLineSearch(lmp)
   fp1 = fp2 = NULL;
   glist = NULL;
   delpos = NULL;
-  groupname = fctrl = flog = fevent = fconfg = NULL;
+  groupname = flog = fevent = fconfg = NULL;
 
   char *id_press = new char[13];
   strcpy(id_press,"thermo_press");
@@ -75,90 +72,15 @@ return;
 }
 
 /* -----------------------------------------------------------------------------
- * deconstructor of ARTn, close files, free memories
- * ---------------------------------------------------------------------------*/
-ARTn::~ARTn()
-{
-  if (fp1) fclose(fp1);
-  if (fp2) fclose(fp2);
-
-  if (flog)  delete [] flog;
-  if (fctrl) delete [] fctrl;
-  if (fevent) delete [] fevent;
-  if (fconfg) delete [] fconfg;
-  if (groupname) delete [] groupname;
-
-  if (glist)  delete [] glist;
-  if (delpos) delete [] delpos;
-
-  if (random) delete random;
-  if (dumpmin) delete dumpmin;
-  if (dumpsad) delete dumpsad;
-
-return;
-}
-
-/* -----------------------------------------------------------------------------
- * parase the artn command
- * ---------------------------------------------------------------------------*/
-void ARTn::command(int narg, char ** arg)
-{
-  // analyze the command line options
-  // grammar: artn etol ftol max_for_eval control_file
-  if (narg != 4 ) error->all(FLERR, "Illegal ARTn command!");
-  if (domain->box_exist == 0) error->all(FLERR,"ARTn command before simulation box is defined");
-
-  update->etol = atof(arg[0]);
-  update->ftol = atof(arg[1]);
-  //update->nsteps = atoi(arg[2]);
-  update->max_eval = atoi(arg[2]);
-  int n = strlen(arg[3]) + 1;
-  fctrl = new char [n];
-  strcpy(fctrl, arg[3]);
-
-  // check the validity of the command line options
-  if (update->etol < 0.0 || update->ftol < 0.0) error->all(FLERR,"Illegal ARTn command");
-
-  // read the control parameters of artn
-  read_control();
-
-  update->whichflag = 2;
-  update->beginstep = update->firststep = update->ntimestep;            
-  update->endstep = update->laststep = update->firststep + update->nsteps; 
-  if (update->laststep < 0 || update->laststep > MAXBIGINT) error->all(FLERR,"Too many iterations");
-
-  lmp->init();
-  if (dumpmin) dumpmin->init();
-  if (dumpsad) dumpsad->init();
-  init();
-  update->minimize->setup();
-  setup();
-
-  timer->init();
-  timer->barrier_start(TIME_LOOP);
-
-  run(update->nsteps);
-
-  timer->barrier_stop(TIME_LOOP);
-
-  //update->minimize->cleanup();
-  cleanup();
-  Finish finish(lmp);
-  finish.end(1);
-
-  update->whichflag = 0;
-  update->firststep = update->laststep = 0;
-  update->beginstep = update->endstep = 0;
-
-return;
-}
-
-/* -----------------------------------------------------------------------------
  * This function try to fit min class function
  * ---------------------------------------------------------------------------*/
-int ARTn::iterate(int maxevent)
+int MinARTn::iterate(int maxevent)
 {
+  // read in control parameters
+  read_control();
   artn_init();
+
+  max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
   char str[MAXLINE];
@@ -209,7 +131,6 @@ int ARTn::iterate(int maxevent)
     }
   }
 
-  int ievent = 0;
   while ( 1 ){
     nattempt++;
     while (! find_saddle() ) nattempt++;
@@ -217,7 +138,7 @@ int ARTn::iterate(int maxevent)
       if(! check_saddle_min() ) continue;
     }
 
-    if (me == 0 && fp2) fprintf(fp2, "%4d %10.6f", ievent+1, ecurrent - eref);
+    if (me == 0 && fp2) fprintf(fp2, "%4d %10.6f", niter+1, ecurrent - eref);
 
     sad_id++;
     if (dumpsad){
@@ -230,19 +151,26 @@ int ARTn::iterate(int maxevent)
     push_down();
     check_new_min();
 
-    if (++ievent >= max_num_events) break;
+    // output for thermo, dump, restart files
+    if (output->next == ++update->ntimestep) {
+      timer->stamp();
+      output->write(update->ntimestep);
+      timer->stamp(TIME_OUTPUT);
+    }
+
+    if (++niter >= max_num_events) break;
   }
 
-  // statistics
-  artn_stat();
+  // finalize ARTn
+  artn_final();
 
-return 1;
+return MAXITER;
 }
 
 /*-----------------------------------------------------------------------------
  * return 1, saddle connect with minimum, else return 0
  *---------------------------------------------------------------------------*/
-int ARTn::check_saddle_min()
+int MinARTn::check_saddle_min()
 {
   for (int i = 0; i < nvec; ++i) {
     x_sad[i] = xvec[i];
@@ -250,16 +178,16 @@ int ARTn::check_saddle_min()
     x0tmp[i] = x0[i];
   }
 
-  // push over the saddle point along the egvec direction
+  // push over the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   for (int i = 0; i < nvec; ++i) hdotxx0 += h[i] * (xvec[i] - x0[i]);
   MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
   if (hdotxx0all < 0){
-    for (int i = 0; i < nvec; ++i) xvec[i] = xvec[i] + h[i] * push_over_saddle;
+    for (int i = 0; i < nvec; ++i) xvec[i] += h[i] * push_over_saddle;
   } else {
-    for (int i = 0; i < nvec; ++i) xvec[i] = xvec[i] - h[i] * push_over_saddle;
+    for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
   }
-  //for (int i = 0; i < nvec; ++i) xvec[i] = x0[i] + push_over_saddle * (xvec[i] - x0[i]);
+
   ecurrent = energy_force(1);
   if (me == 0){
     if (fp1) fprintf(fp1, "  Stage 4, puch back the saddle to confirm sad-%d is linked with min-%d\n", sad_id, ref_id);
@@ -270,11 +198,13 @@ int ARTn::check_saddle_min()
   stopstr = stopstrings(stop_condition);
   ecurrent = energy_force(0);
   artn_reset_vec();
+
   // output minimization information
   if (me == 0 && fp1){
     fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
     fprintf(fp1, "    - Current (ref) energy (eV) : %lg\n", ecurrent);
   }
+
   double dr = 0., drall;
   double **x = atom->x;
   double *x0 = fix_minimize->request_vector(6);
@@ -292,6 +222,7 @@ int ARTn::check_saddle_min()
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
+
   if (drall < max_disp_tol) {
     if (me == 0){
       if (fp1) fprintf(fp1, "  Stage 4 succeeded, dr = %g < %g, accept the new saddle.\n", drall, max_disp_tol);
@@ -325,7 +256,7 @@ return 0;
 /* -----------------------------------------------------------------------------
  * push the configuration push_down
  * ---------------------------------------------------------------------------*/
-void ARTn::push_down()
+void MinARTn::push_down()
 {
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
@@ -334,7 +265,6 @@ void ARTn::push_down()
 
   if (hdotxx0all > 0.) for (int i = 0; i < nvec; ++i) xvec[i] += h[i] * push_over_saddle;
   else for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
-
 
   ecurrent = energy_force(1);
   if (me == 0){
@@ -371,7 +301,7 @@ return;
 /* -----------------------------------------------------------------------------
  * decide whether reject or accept the new configuration
  * ---------------------------------------------------------------------------*/
-void ARTn::check_new_min()
+void MinARTn::check_new_min()
 {
   // output reference energy ,current energy and pressure.
   if (me == 0 && fp2) fprintf(fp2, " %5d %4d %5d %6d %12.6f %12.6f", ref_id, sad_id, min_id, that, eref, ecurrent);
@@ -453,12 +383,10 @@ return;
 /* -----------------------------------------------------------------------------
  * setup default parameters, some values come from Norman's code
  * ---------------------------------------------------------------------------*/
-void ARTn::set_defaults()
+void MinARTn::set_defaults()
 {
   seed = 12345;
   nattempt = ref_id = min_id = sad_id = 0;
-
-  max_conv_steps   = 100000;
 
   // for art
   temperature      = 0.5;
@@ -502,12 +430,12 @@ return;
 /* -----------------------------------------------------------------------------
  * read parameters from file "config"
  * ---------------------------------------------------------------------------*/
-void ARTn::read_control()
+void MinARTn::read_control()
 {
   char oneline[MAXLINE], str[MAXLINE], *token1, *token2;
-  FILE *fp = fopen(fctrl, "r");
+  FILE *fp = fopen("artn.control", "r");
   if (fp == NULL){
-    sprintf(str, "cannot open ARTn control parameter file: %s", fctrl);
+    sprintf(str, "cannot open ARTn control parameter file.");
     error->all(FLERR, str);
   }
 
@@ -526,11 +454,7 @@ void ARTn::read_control()
       error->all(FLERR, str);
     }
 
-    if (strcmp(token1, "max_conv_steps") == 0){
-      max_conv_steps = atoi(token2);
-      if (max_conv_steps < 1) error->all(FLERR, "max_conv_steps must be greater than 0");
-
-    } else if (strcmp(token1, "random_seed") == 0){
+    if (strcmp(token1, "random_seed") == 0){
       seed = atoi(token2);
       if (seed < 1) error->all(FLERR, "seed must be greater than 0");
 
@@ -712,7 +636,6 @@ void ARTn::read_control()
     }
 
     fprintf(fp1, "\n===================================== ARTn based on LAMMPS ========================================\n");
-    fprintf(fp1, "max_conv_steps    %20d  # %s\n", max_conv_steps, "Max steps before convergence for minimization");
     fprintf(fp1, "random_seed       %20d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
     fprintf(fp1, "\n");
@@ -797,7 +720,7 @@ return;
 /* -----------------------------------------------------------------------------
  * initializing for ARTn
  * ---------------------------------------------------------------------------*/
-void ARTn::artn_init()
+void MinARTn::artn_init()
 {
   random = new RanPark(lmp, seed+me);
 
@@ -847,13 +770,15 @@ void ARTn::artn_init()
   delete [] recv;
   memory->destroy(llist);
 
+  if (dumpmin) dumpmin->init();
+  if (dumpsad) dumpsad->init();
 return;
 }
 
 /* ----------------------------------------------------------------------------
  * reset vectors
  * --------------------------------------------------------------------------*/
-void ARTn::artn_reset_vec()
+void MinARTn::artn_reset_vec()
 {
   x0tmp = fix_minimize->request_vector(3);
   h_old = fix_minimize->request_vector(4);
@@ -870,7 +795,7 @@ return;
 /* -----------------------------------------------------------------------------
  * Try to find saddle point. If failed, return 0, else return 1
  * ---------------------------------------------------------------------------*/
-int ARTn::find_saddle( )
+int MinARTn::find_saddle( )
 {
   int flag = 0;
   double ftot = 0., ftotall, fpar2 = 0.,fpar2all = 0., fperp2 = 0., fperp2all,  delr;
@@ -1203,7 +1128,7 @@ return 0;
 /* -----------------------------------------------------------------------------
  * reset coordinates x0tmp
  * ---------------------------------------------------------------------------*/
-void ARTn::reset_coords()
+void MinARTn::reset_coords()
 {
   domain->set_global_box();
 
@@ -1233,7 +1158,7 @@ return;
 /* ------------------------------------------------------------------------------
  * random kick atoms in the defined group and radius
  * ----------------------------------------------------------------------------*/
-void ARTn::random_kick()
+void MinARTn::random_kick()
 {
   // define the central atom that will be activated
   if (me == 0){
@@ -1329,7 +1254,7 @@ return;
 /* -----------------------------------------------------------------------------
  * converge to minimum, here I use conjugate gradient method.
  * ---------------------------------------------------------------------------*/
-int ARTn::min_converge(int maxiter)
+int MinARTn::min_converge(int maxiter)
 {
   neval = 0;
   int i,fail,ntimestep;
@@ -1416,7 +1341,7 @@ return MAXITER;
  *   fanding saddle points without knowledge of final states,
  *   121, 20(2004)
  * ---------------------------------------------------------------------------*/
-void ARTn::lanczos(bool new_projection, int flag, int maxvec){
+void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   FixMinimize * fix_lanczos;
   char **fixarg = new char*[3];
   fixarg[0] = (char *) "lanczos";
@@ -1580,7 +1505,7 @@ return;
 /* ---------------------------------------------------------------------------
  *  FIRE: fast interial relaxation engine, here d_min is not considered.
  * -------------------------------------------------------------------------*/
-int ARTn::min_perpendicular_fire(int maxiter){
+int MinARTn::min_perpendicular_fire(int maxiter){
   double dt = update->dt;
   const int n_min = 5;
   const double f_inc = 1.1;
@@ -1691,7 +1616,7 @@ return 0;
 /* ---------------------------------------------------------------------------
  *  A little bit statistics on exit
  * -------------------------------------------------------------------------*/
-void ARTn::artn_stat()
+void MinARTn::artn_final()
 {
   if (me == 0){
     if (fp1){
@@ -1703,8 +1628,11 @@ void ARTn::artn_stat()
       fprintf(fp1, "# Number of accepted minima    : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(fp1, "# Number of force evaluation   : %d\n", evalf);
       fprintf(fp1, "==========================================================================================\n");
+      fclose(fp1);
     }
    
+    if (fp2) fclose(fp2);
+
     if (screen){
       fprintf(screen, "\n");
       fprintf(screen, "==========================================================================================\n");
@@ -1717,7 +1645,18 @@ void ARTn::artn_stat()
     }
   }
 
-  MPI_Barrier(world);
+  if (flog)  delete [] flog;
+  if (fevent) delete [] fevent;
+  if (fconfg) delete [] fconfg;
+  if (groupname) delete [] groupname;
+
+  if (glist)  delete [] glist;
+  if (delpos) delete [] delpos;
+
+  if (random) delete random;
+  if (dumpmin) delete dumpmin;
+  if (dumpsad) delete dumpsad;
+
 return;
 }
 /* ---------------------------------------------------------------------- */
