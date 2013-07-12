@@ -46,7 +46,7 @@ private:
 
   int me, np;
   int vec_count;
-  int evalf;
+  bigint evalf;
   bool eigen_vec_exist;
 
   double eref;
@@ -69,7 +69,7 @@ private:
   double temperature;      // Fictive temperature, if negative always reject the event
 
   // for art
-  int nattempt;
+  int nattempt, stage;
   int max_num_events;      // Maximum number of events
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
@@ -113,6 +113,7 @@ private:
   int log_level;           // 1, all; 0, main
 
   void artn_final();
+  void write_header(const int);
 };
 
 }
