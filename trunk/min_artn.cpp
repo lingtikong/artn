@@ -805,6 +805,8 @@ int MinARTn::find_saddle( )
 
   if (me == 0) write_header(3);
 
+  int nmax_perp = max_perp_move_h;
+
   // try to leave harmonic well
   for (int local_iter = 0; local_iter < max_iter_basin; local_iter++){
     // minimizing perpendicularly by using SD method
@@ -812,7 +814,7 @@ int MinARTn::find_saddle( )
     artn_reset_vec();
 
     m_perp = nfail = trial = 0;
-    step = increment_size / basin_factor;
+    step = increment_size;
     while ( 1 ){
       preenergy = ecurrent;
       fdoth = 0.;
@@ -825,7 +827,7 @@ int MinARTn::find_saddle( )
         fperp2 += fperp[i] * fperp[i];
       }
       MPI_Allreduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,world);
-      if (fperp2all < force_thh_p2 || m_perp > max_perp_move_h || nfail > 5) break; // condition to break
+      if (fperp2all < force_thh_p2 || m_perp > nmax_perp || nfail > 5) break; // condition to break
       
       for (int i = 0; i < nvec; ++i){
         x0tmp[i] = xvec[i];
@@ -864,31 +866,46 @@ int MinARTn::find_saddle( )
     
     fpar2 = 0.;
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
-    MPI_Reduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,0,world);
+    MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(dotall[0]);
       delr   = sqrt(dotall[1]);
-      if (fp1 && log_level && local_iter%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter+1,
+      if (fp1 && log_level && local_iter%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
-      if (screen && local_iter%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter+1,
+      if (screen && local_iter%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
     }
     
     if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
-      if (me == 0) write_header(4);
+      if (me == 0){
+        if (fp1 && log_level && local_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+        ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
+        if (screen && local_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+        ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
+      
+        write_header(4);
+      }
 
       flag = 1;
       break;
     }
     
     // push along the search direction
-    for(int i = 0; i < nvec; ++i) xvec[i] += basin_factor * increment_size * h[i];
+    step = basin_factor * increment_size * MAX(1.e-4, MIN(2., -fpar2all));
+    for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
   if (flag == 0){
-    if (me == 0) write_header(5);
+    if (me == 0){
+      if (fp1 && log_level && (max_iter_basin-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
+      ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
+      if (screen && (max_iter_basin-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
+      ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
+
+      write_header(5);
+    }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); evalf++;
     artn_reset_vec(); reset_coords();
@@ -899,6 +916,8 @@ int MinARTn::find_saddle( )
   flag = 0; stage++;
 
   if (me == 0) write_header(6);
+
+  double hdot , hdotall, tmpsum, tmpsumall;
 
   // now try to move close to the saddle point according to the egvec.
   int inc = 0;
@@ -912,7 +931,6 @@ int MinARTn::find_saddle( )
     lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
 
     // set search direction according to egvec
-    double hdot , hdotall, tmpsum, tmpsumall;
     hdot = hdotall = tmpsum = tmpsumall = 0.;
     for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
 
@@ -932,7 +950,7 @@ int MinARTn::find_saddle( )
       m_perp = trial = nfail = 0;
       step = increment_size * 0.4;
       int max_perp = max_perp_moves_c + saddle_iter + inc;
-      while (1){
+      while ( 1 ){
         preenergy = ecurrent;
         fdoth = 0.;
         for (int i = 0; i < nvec; i++) fdoth += fvec[i] * h[i];
@@ -972,15 +990,17 @@ int MinARTn::find_saddle( )
       }
     }
         
-    tmp = ftot = 0.;
+    double tmp_me[2], tmp_all[2];
+    delr = ftot = 0.;
     for (int i = 0; i < nvec; ++i) {
       ftot += fvec[i] * fvec[i];
-      delr = xvec[i] - x0[i];
-      tmp += delr * delr;
+      tmp = xvec[i] - x0[i];
+      delr += tmp*tmp;
     }
-    MPI_Allreduce(&ftot, &ftotall,1,MPI_DOUBLE,MPI_SUM,world);
-    MPI_Reduce(&tmp,  &delr,   1,MPI_DOUBLE,MPI_SUM,0,world);
-    ftotall = sqrt(ftotall);
+    tmp_me[0] = ftot; tmp_me[1] = delr;
+    MPI_Allreduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, world);
+    ftotall = sqrt(tmp_all[0]);
+    delr    = tmp_all[1];
    
     // output information
     fpar2 = 0.;
@@ -989,25 +1009,32 @@ int MinARTn::find_saddle( )
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     if (fpar2all > -1.) inc = 10;
 
-    tmp = 0.;
+    fperp2 = 0.;
     for (int i = 0; i < nvec; ++i){
-      fperp2 = fvec[i] - fpar2all * h[i];
-      tmp += fperp2*fperp2;
+      tmp = fvec[i] - fpar2all * h[i];
+      fperp2 +=  tmp * tmp;
     }
-    MPI_Reduce(&tmp, &fperp2,1,MPI_DOUBLE,MPI_SUM,0,world);
+    MPI_Reduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,0,world);
   
     if (me == 0){
       delr = sqrt(delr);
-      fperp2 = sqrt(fperp2);
+      fperp2 = sqrt(fperp2all);
       if (fp1 && log_level && saddle_iter%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter+1, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
       if (screen && saddle_iter%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter+1, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
     }
    
    
     if (eigenvalue > eigen_th_fail){
-      if (me == 0) write_header(7);
+      if (me == 0){
+        if (fp1 && log_level && saddle_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (screen && saddle_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+ 
+        write_header(7);
+      }
 
       for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   
@@ -1015,19 +1042,34 @@ int MinARTn::find_saddle( )
      }
   
     if (ftotall < force_th_saddle){
-      if (me == 0) write_header(8);
+      if (me == 0){
+        if (fp1 && log_level && saddle_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (screen && saddle_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+
+         write_header(8);
+      }
 
       return 1;
     }
   
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
-    double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(eigenvalue),0.5));
+#define MinEGV 0.1 // was 0.5
+    double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(eigenvalue), MinEGV));
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
     ecurrent = energy_force(1); evalf++;
     artn_reset_vec(); reset_coords();
   }
 
-  if (me == 0) write_header(9);
+  if (me == 0){
+    if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+    if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+
+    write_header(9);
+  }
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   ecurrent = energy_force(1); evalf++;
@@ -1431,6 +1473,8 @@ int MinARTn::min_perpendicular_fire(int maxiter)
   double alpha;
   int last_negative = 0.;
 
+  double force_thr2 = force_th_perp_sad*force_th_perp_sad;
+
   for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
 
   alpha = alpha_start;
@@ -1468,7 +1512,7 @@ int MinARTn::min_perpendicular_fire(int maxiter)
       MPI_Allreduce(&vdotv,&vdotvall,1,MPI_DOUBLE,MPI_SUM,world);
       MPI_Allreduce(&fdotf,&fdotfall,1,MPI_DOUBLE,MPI_SUM,world);
       
-      if (fdotfall < force_th_perp_sad*force_th_perp_sad) return 1;
+      if (fdotfall < force_thr2) return 1;
 
       if (fdotfall == 0.) scale2 = 0.;
       else scale2 = alpha * sqrt(vdotvall/fdotfall);
