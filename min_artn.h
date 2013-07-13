@@ -115,6 +115,7 @@ private:
 
   void artn_final();
   void write_header(const int);
+
 };
 
 }
