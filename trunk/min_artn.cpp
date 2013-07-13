@@ -299,6 +299,7 @@ void MinARTn::check_new_min()
   double dx,dy,dz;
 
   int n = 0;
+
   // calculate dr
   // check minimum image
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
@@ -791,16 +792,16 @@ int MinARTn::find_saddle( )
   double step, preenergy;
   double tmp;
   int m_perp = 0, trial = 0, nfail = 0;
+  double tmp_me[2], tmp_all[2];
 
   double force_thh_p2 = force_th_perp_h * force_th_perp_h;
   double force_thc_p2 = force_th_perp_sad * force_th_perp_sad;
 
   eigenvalue = 0.;
   eigen_vec_exist = 0;
-
   for (int i = 0; i < nvec; i++) x0[i] = x00[i] = xvec[i];
 
-  // random move choose
+  // randomly displace the desired atoms: activation
   random_kick();
 
   if (me == 0) write_header(3);
@@ -834,8 +835,7 @@ int MinARTn::find_saddle( )
         xvec[i] += step * fperp[i];
       }
       ecurrent = energy_force(1); evalf++;
-      artn_reset_vec();
-      reset_coords();
+      artn_reset_vec(); reset_coords();
       
       if (ecurrent < preenergy){
         step *= 1.2;
@@ -858,9 +858,9 @@ int MinARTn::find_saddle( )
       tmp = xvec[i] - x0[i];
       delr += tmp * tmp;
     }
-    double dot[2] = {ftot, delr};
-    double dotall[2];
-    MPI_Reduce(dot, dotall,2,MPI_DOUBLE,MPI_SUM,0,world);
+    tmp_me[0] = ftot; tmp_me[1] = delr;
+    MPI_Reduce(tmp_me, tmp_all,2,MPI_DOUBLE,MPI_SUM,0,world);
+    ftotall = tmp_all[0]; delr = tmp_all[1];
     
     if (local_iter > min_num_ksteps) lanczos(!eigen_vec_exist, 1, num_lancz_vec_h);
     
@@ -870,8 +870,8 @@ int MinARTn::find_saddle( )
     
     if (me == 0){
       fperp2 = sqrt(fperp2all);
-      ftot   = sqrt(dotall[0]);
-      delr   = sqrt(dotall[1]);
+      ftot   = sqrt(ftotall);
+      delr   = sqrt(delr);
       if (fp1 && log_level && local_iter%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
       if (screen && local_iter%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
@@ -893,7 +893,7 @@ int MinARTn::find_saddle( )
     }
     
     // push along the search direction
-    step = basin_factor * increment_size * MAX(1.e-4, MIN(2., -fpar2all));
+    step = basin_factor * increment_size * MAX(-1.e-2, MIN(2., -fpar2all));
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
@@ -922,8 +922,6 @@ int MinARTn::find_saddle( )
   // now try to move close to the saddle point according to the egvec.
   int inc = 0;
   for (int saddle_iter = 0; saddle_iter < max_activat_iter; ++saddle_iter){
-    //ecurrent = energy_force(1); evalf++;
-    //artn_reset_vec(); reset_coords();
 
     for (int i = 0; i < nvec; ++i) h_old[i] = h[i];
 
@@ -990,7 +988,6 @@ int MinARTn::find_saddle( )
       }
     }
         
-    double tmp_me[2], tmp_all[2];
     delr = ftot = 0.;
     for (int i = 0; i < nvec; ++i) {
       ftot += fvec[i] * fvec[i];
@@ -999,8 +996,7 @@ int MinARTn::find_saddle( )
     }
     tmp_me[0] = ftot; tmp_me[1] = delr;
     MPI_Allreduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, world);
-    ftotall = sqrt(tmp_all[0]);
-    delr    = tmp_all[1];
+    ftotall = sqrt(tmp_all[0]); delr = tmp_all[1];
    
     // output information
     fpar2 = 0.;
