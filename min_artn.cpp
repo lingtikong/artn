@@ -1,11 +1,11 @@
-/*---------------------------------------------------
-  Some features of this code are writtern according to
-  Norman's Code version 3.0 MinARTn. The explanlation of 
-  the parameters I used here can be found in the doc of
-  his code.
-  This code don't do minimizing include extra peratom dof or 
-  extra global dof.
-----------------------------------------------------*/
+/* -------------------------------------------------------------------------------------------------
+ * Some features of this code are writtern according to
+ * Norman's Code version 3.0 MinARTn. The explanlation of 
+ * the parameters I used here can be found in the doc of
+ * his code.
+ * This code don't do minimizing include extra peratom dof or 
+ * extra global dof.
+------------------------------------------------------------------------------------------------- */
 #include "min_artn.h"
 #include "atom.h"
 #include "domain.h"
@@ -27,10 +27,9 @@
 
 using namespace LAMMPS_NS;
 
-/*---------------------------------------------------
-  Here I use clapack to help evaluate the lowest 
-  eigenvalue of the matrix in lanczos.
----------------------------------------------------*/
+/* -------------------------------------------------------------------------------------------------
+ * clapack is used to evaluate the lowest eigenvalue of the matrix in Lanczos.
+------------------------------------------------------------------------------------------------- */
 extern "C" {
 #include "f2c.h"
 #include "clapack.h"
@@ -40,9 +39,9 @@ extern "C" {
 
 enum{MAXITER,MAXEVAL,ETOL,FTOL,DOWNHILL,ZEROALPHA,ZEROFORCE,ZEROQUAD};
 
-/* -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * Constructor of ARTn
- * ---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 {
   random = NULL;
@@ -71,9 +70,9 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 return;
 }
 
-/* -----------------------------------------------------------------------------
- * This function try to fit min class function
- * ---------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------------------------------------
+ * The main loops of ARTn
+------------------------------------------------------------------------------------------------- */
 int MinARTn::iterate(int maxevent)
 {
   // read in control parameters
@@ -161,9 +160,9 @@ int MinARTn::iterate(int maxevent)
 return MAXITER;
 }
 
-/*-----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * return 1, saddle connect with minimum, else return 0
- *---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 int MinARTn::check_saddle_min()
 {
   stage++;
@@ -245,9 +244,9 @@ int MinARTn::check_saddle_min()
 return 0;
 }
 
-/* -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * push the configuration push_down
- * ---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 void MinARTn::push_down()
 {
   // push over the saddle point along the egvec direction
@@ -285,9 +284,9 @@ void MinARTn::push_down()
 return;
 }
 
-/* -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * decide whether reject or accept the new configuration
- * ---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 void MinARTn::check_new_min()
 {
   // output reference energy ,current energy and pressure.
@@ -361,9 +360,9 @@ void MinARTn::check_new_min()
 return;
 }
 
-/* -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * setup default parameters, some values come from Norman's code
- * ---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 void MinARTn::set_defaults()
 {
   seed = 12345;
@@ -404,13 +403,14 @@ void MinARTn::set_defaults()
   force_th_perp_sad = 0.05;
 
   log_level         = 1;
+  print_freq        = 1;
 
 return;
 }
 
-/* -----------------------------------------------------------------------------
- * read parameters from file "config"
- * ---------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------------------------------------
+ * read ARTn control parameters from file "artn.control"
+------------------------------------------------------------------------------------------------- */
 void MinARTn::read_control()
 {
   char oneline[MAXLINE], str[MAXLINE], *token1, *token2;
@@ -551,6 +551,9 @@ void MinARTn::read_control()
     } else if (!strcmp(token1, "log_level")){
       log_level = atoi(token2);
 
+    } else if (!strcmp(token1, "print_freq")){
+      print_freq = atoi(token2);
+
     } else if (strcmp(token1, "event_list_file") == 0){
       if (fevent) delete [] fevent;
       fevent = new char [strlen(token2)+1];
@@ -653,6 +656,7 @@ void MinARTn::read_control()
     fprintf(fp1, "\n");
     fprintf(fp1, "log_file          %20s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
     fprintf(fp1, "log_level         %20d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
+    fprintf(fp1, "print_freq        %20d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
     fprintf(fp1, "event_list_file   %20s  # %s\n", fevent, "File to record the event info; NULL to skip");
     fprintf(fp1, "init_config_id    %20d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "dump_min_config   %20s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
@@ -698,9 +702,9 @@ void MinARTn::read_control()
 return;
 }
 
-/* -----------------------------------------------------------------------------
- * initializing for ARTn
- * ---------------------------------------------------------------------------*/
+/* -------------------------------------------------------------------------------------------------
+ * initializing ARTn
+------------------------------------------------------------------------------------------------- */
 void MinARTn::artn_init()
 {
   random = new RanPark(lmp, seed+me);
@@ -759,9 +763,9 @@ void MinARTn::artn_init()
 return;
 }
 
-/* ----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * reset vectors
- * --------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 void MinARTn::artn_reset_vec()
 {
   x0tmp = fix_minimize->request_vector(3);
@@ -776,9 +780,9 @@ void MinARTn::artn_reset_vec()
 return;
 }
 
-/* -----------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  * Try to find saddle point. If failed, return 0, else return 1
- * ---------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 int MinARTn::find_saddle( )
 {
   int flag = 0;
@@ -788,6 +792,9 @@ int MinARTn::find_saddle( )
   double tmp;
   int m_perp = 0, trial = 0, nfail = 0;
 
+  double force_thh_p2 = force_th_perp_h * force_th_perp_h;
+  double force_thc_p2 = force_th_perp_sad * force_th_perp_sad;
+
   eigenvalue = 0.;
   eigen_vec_exist = 0;
 
@@ -796,15 +803,7 @@ int MinARTn::find_saddle( )
   // random move choose
   random_kick();
 
-/*
-  ecurrent = energy_force(1); evalf++;
-  artn_reset_vec();
-*/
-
-  if (me == 0){
-    if (fp1){ write_header(3); fflush(fp1); }
-    if (screen) write_header(4);
-  }
+  if (me == 0) write_header(3);
 
   // try to leave harmonic well
   for (int local_iter = 0; local_iter < max_iter_basin; local_iter++){
@@ -813,7 +812,7 @@ int MinARTn::find_saddle( )
     artn_reset_vec();
 
     m_perp = nfail = trial = 0;
-    step = increment_size * 0.4;
+    step = increment_size / basin_factor;
     while ( 1 ){
       preenergy = ecurrent;
       fdoth = 0.;
@@ -826,7 +825,7 @@ int MinARTn::find_saddle( )
         fperp2 += fperp[i] * fperp[i];
       }
       MPI_Allreduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,world);
-      if (fperp2all < force_th_perp_h*force_th_perp_h || m_perp > max_perp_move_h || nfail > 5) break; // condition to break
+      if (fperp2all < force_thh_p2 || m_perp > max_perp_move_h || nfail > 5) break; // condition to break
       
       for (int i = 0; i < nvec; ++i){
         x0tmp[i] = xvec[i];
@@ -871,17 +870,15 @@ int MinARTn::find_saddle( )
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(dotall[0]);
       delr   = sqrt(dotall[1]);
-      if (fp1 && log_level) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+      if (fp1 && log_level && local_iter%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter+1,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
-      if (screen) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+      if (screen && local_iter%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter+1,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
     }
     
     if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
-      if (me == 0){
-        if (fp1) write_header(5);
-    	  if (screen) write_header(6);
-      }
+      if (me == 0) write_header(4);
+
       flag = 1;
       break;
     }
@@ -891,16 +888,7 @@ int MinARTn::find_saddle( )
   }
 
   if (flag == 0){
-    if (me == 0){
-      if (fp1){
-        write_header(7);
-        fprintf(fp1, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
-      }
-      if (screen){
-        write_header(8);
-        fprintf(screen, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
-      }
-    }
+    if (me == 0) write_header(5);
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); evalf++;
     artn_reset_vec(); reset_coords();
@@ -910,13 +898,7 @@ int MinARTn::find_saddle( )
 
   flag = 0; stage++;
 
-  if (me == 0){
-    if (fp1){
-      fprintf(fp1, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
-      if (log_level) write_header(9);
-    }
-    if (screen) write_header(10);
-  }
+  if (me == 0) write_header(6);
 
   // now try to move close to the saddle point according to the egvec.
   int inc = 0;
@@ -961,10 +943,9 @@ int MinARTn::find_saddle( )
           fperp2 += fperp[i] * fperp[i];
         }
         MPI_Allreduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,world);
-        fperp2 = sqrt(fperp2all);
 
         // condition to break
-        if (fperp2 < force_th_perp_sad || m_perp > max_perp || nfail > 5) break; 
+        if (fperp2all < force_thc_p2 || m_perp > max_perp || nfail > 5) break; 
         
         for (int i = 0; i < nvec; ++i){
           x0tmp[i] = xvec[i];
@@ -1018,40 +999,24 @@ int MinARTn::find_saddle( )
     if (me == 0){
       delr = sqrt(delr);
       fperp2 = sqrt(fperp2);
-      if (fp1 && log_level) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
-      if (screen) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      if (fp1 && log_level && saddle_iter%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+      saddle_iter+1, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      if (screen && saddle_iter%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+      saddle_iter+1, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
     }
    
    
     if (eigenvalue > eigen_th_fail){
-      if (me == 0){
-        if (fp1){
-          write_header(7);
-          fprintf(fp1, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, eigenvalue, eigen_th_fail);
-        }
-        if (screen){
-          write_header(8);
-          fprintf(screen, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, eigenvalue, eigen_th_fail);
-        }
-      }
+      if (me == 0) write_header(7);
+
       for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   
       return 0;
      }
   
     if (ftotall < force_th_saddle){
-      if (me == 0){
-        if (fp1){
-          write_header(7);
-          fprintf(fp1, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
-        }
-        if (screen){
-          write_header(8);
-          fprintf(screen, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
-        }
-      }
+      if (me == 0) write_header(8);
+
       return 1;
     }
   
@@ -1062,16 +1027,7 @@ int MinARTn::find_saddle( )
     artn_reset_vec(); reset_coords();
   }
 
-  if (me == 0){
-    if (fp1){
-      write_header(7);
-      fprintf(fp1, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
-    }
-    if (screen){
-      write_header(8);
-      fprintf(screen, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
-    }
-  }
+  if (me == 0) write_header(9);
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   ecurrent = energy_force(1); evalf++;
@@ -1613,9 +1569,9 @@ void MinARTn::artn_final()
 return;
 }
 
-/* ---------------------------------------------------------------------------
+/* -------------------------------------------------------------------------------------------------
  *  Write out related info
- * -------------------------------------------------------------------------*/
+------------------------------------------------------------------------------------------------- */
 void MinARTn::write_header(const int flag)
 {
   if (flag == 1){
@@ -1627,43 +1583,87 @@ void MinARTn::write_header(const int flag)
       fprintf(fp2, "#Event   del-E    ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
 
   } else if (flag == 3){
-    fprintf(fp1, "  Stage %d, search for the saddle from configuration %d\n", stage, ref_id);
-    if (log_level){
-      fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(fp1, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr    evalf\n");
-      fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+    if (fp1){
+      fprintf(fp1, "  Stage %d, search for the saddle from configuration %d\n", stage, ref_id);
+      if (log_level){
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+        fprintf(fp1, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr   evalf\n");
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      }
+      fflush(fp1);
+    }
+    if (screen){
+      fprintf(screen, "  Stage %d, search for the saddle from configuration %d\n", stage, ref_id);
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr   evalf\n");
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
     }
 
   } else if (flag == 4){
-    fprintf(screen, "  Stage %d, search for the saddle from configuration %d\n", stage, ref_id);
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-    fprintf(screen, "    Steps  E-Eref m_perp trial ftot       fpar        fperp     eigen       delr    evalf\n");
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+    }
 
   } else if (flag == 5){
-    if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-    fprintf(fp1, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
+    }
 
   } else if (flag == 6){
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-    fprintf(screen, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+    if (fp1){
+      fprintf(fp1, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
+      if (log_level){
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+        fprintf(fp1, "    Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr   evalf     a1\n");
+        fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      }
+    }
+    if (screen){
+      fprintf(screen, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "    Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr   evalf     a1\n");
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+    }
 
   } else if (flag == 7){
-    if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, eigenvalue, eigen_th_fail);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, eigenvalue, eigen_th_fail);
+    }
 
   } else if (flag == 8){
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
+    }
 
   } else if (flag == 9){
-    fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-    fprintf(fp1, "    Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr  evalf     a1\n");
-    fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-
-  } else if (flag == 10){
-    fprintf(screen, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-    fprintf(screen, "    Iter   E-Eref m_perp trial  ftot      fpar        fperp      eigen      delr  evalf     a1\n");
-    fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
+    }
 
   } else if (flag == 11){
     if (fp1) fprintf(fp1, "  Stage %d, puch back the saddle to confirm sad-%d is linked with min-%d\n", stage, sad_id, ref_id);
@@ -1684,4 +1684,4 @@ void MinARTn::write_header(const int flag)
 
 return;
 }
-/* ---------------------------------------------------------------------- */
+/* ---------------------------------------------------------------------------------------------- */
