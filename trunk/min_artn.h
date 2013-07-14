@@ -75,7 +75,7 @@ private:
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
   int use_fire;            // use FIRE to do minimuzation in the perpendicular direction
-  int flag_check_sad;      // if 1, will push back saddle point to check if it connect with the minimum
+  int flag_push_back;      // if 1, will push back saddle point to check if it connect with the minimum
   int flag_relax_sad;      // further relax to the newly found saddle
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
   int flag_press;          // Pressure will be calculated.
