@@ -130,7 +130,7 @@ int MinARTn::iterate(int maxevent)
 
     ++sad_found;
 
-    if (flag_check_sad) if(! check_saddle_min()){++sad_reject; continue;}
+    if (flag_push_back) if(! check_saddle_min()){++sad_reject; continue;}
 
     ++ievent; ++stage;
     if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f", ievent, ecurrent - eref);
@@ -308,6 +308,7 @@ void MinARTn::check_new_min()
   double *x0 = fix_minimize->request_vector(6);
   int nlocal = atom->nlocal;
   double dx,dy,dz;
+  double tmp_me[2], tmp_all[2]; tmp_all[0] = tmp_all[1] = 0.;
 
   int n = 0;
 
@@ -325,8 +326,9 @@ void MinARTn::check_new_min()
     if(tmp > disp_thr2) ++n_moved;
     n += 3;
   }
-  MPI_Reduce(&dr, &drall, 1, MPI_DOUBLE, MPI_SUM, 0, world);
-  MPI_Reduce(&n_moved, &n_movedall, 1, MPI_INT, MPI_SUM, 0, world);
+  tmp_me[0] = dr; tmp_me[1] = double(n_moved);
+  MPI_Reduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, 0, world);
+  drall = tmp_all[0]; n_movedall = int(tmp_all[1]);
   if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
 
   // set v = 0 to calculate pressure
@@ -346,7 +348,8 @@ void MinARTn::check_new_min()
   int acc = 0;
   if (me == 0){
     drall = sqrt(drall);
-    if (fp1) fprintf(fp1, "    - Distance to min-%8.8d  : %g\n", ref_id, drall);
+    if (fp1) fprintf(fp1, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
+    if (screen) fprintf(screen, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
 
     if (temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature))) acc = 1;
   }
@@ -387,7 +390,7 @@ void MinARTn::set_defaults()
   max_activat_iter = 300;
   increment_size   = 0.09;
   use_fire         = 0;
-  flag_check_sad   = 0;
+  flag_push_back   = 0;
   flag_relax_sad   = 0;
   max_disp_tol     = 0.1;
   flag_press       = 0;
@@ -547,8 +550,8 @@ void MinARTn::read_control()
     } else if (strcmp(token1, "use_fire") == 0){
       use_fire = atoi(token2);
 
-    } else if (!strcmp(token1, "flag_check_sad")){
-      flag_check_sad = atoi(token2);
+    } else if (!strcmp(token1, "flag_push_back")){
+      flag_push_back = atoi(token2);
 
     } else if (!strcmp(token1, "flag_relax_sad")){
       flag_relax_sad = atoi(token2);
@@ -666,7 +669,7 @@ void MinARTn::read_control()
     fprintf(fp1, "max_perp_moves_c  %20d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
     fprintf(fp1, "force_th_perp_sad %20g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
     fprintf(fp1, "\n");
-    fprintf(fp1, "flag_check_sad    %20d  # %s\n", flag_check_sad, "Push back the saddle to confirm its link with the initial min");
+    fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
     fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
     fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
@@ -1065,6 +1068,9 @@ int MinARTn::find_saddle( )
 
         stop_condition = sad_converge(max_conv_steps); evalf += neval;
         stopstr = stopstrings(stop_condition);
+
+        lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
+        for (int i = 0; i < nvec; i++) h[i] = egvec[i];
 
         double fdotf = fnorm_sqr();
         // output minimization information
@@ -1771,6 +1777,10 @@ void MinARTn::write_header(const int flag)
 return;
 }
 
+/* -------------------------------------------------------------------------------------------------
+ * Converge the saddle point by using SD method; the force parallel to the eigenvector corresponding
+ * to the smallest eigenvalue is reversed.
+------------------------------------------------------------------------------------------------- */
 int MinARTn::sad_converge(int maxiter)
 {
   neval = 0;
@@ -1778,21 +1788,12 @@ int MinARTn::sad_converge(int maxiter)
   double edf, edf_all;
 
   // initialize working vectors
-  eprevious = ecurrent = energy_force(1); ++neval;
-  // caculate eigenvector by using lanczos
-  eigen_vec_exist = 0;
-  lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
-
   edf = 0.;
   for (i =0; i < nvec; ++i) edf += egvec[i] * fvec[i];
   MPI_Allreduce(&edf, &edf_all,1,MPI_DOUBLE,MPI_SUM,world);
-
   for (i = 0; i < nvec; ++i) h[i] = fvec[i] - 2.*edf_all*egvec[i];
 
   for (int iter = 0; iter < maxiter; ++iter) {
-    //ntimestep = ++update->ntimestep;
-    ++niter;
-
     // line minimization along h from current position x
     // h = downhill gradient direction
     eprevious = ecurrent;
@@ -1803,7 +1804,6 @@ int MinARTn::sad_converge(int maxiter)
     if (neval >= update->max_eval) return MAXEVAL;
 
     // energy tolerance criterion
-
     if (fabs(ecurrent-eprevious) <
         update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY))
       return ETOL;
