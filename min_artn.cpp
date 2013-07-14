@@ -270,10 +270,17 @@ void MinARTn::push_down()
   artn_reset_vec();
 
   // output minimization information
-  if (me == 0 && fp1){
-    fprintf(fp1, "  Relaxed to a nearby minimum to sad-%d\n", sad_id);
-    fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
-    fprintf(fp1, "    - Current (ref) energy (eV) : %lg\n", ecurrent);
+  if (me == 0){
+    if (fp1){
+      fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(fp1, "      - Minimize stop condition   : %s\n",  stopstr);
+      fprintf(fp1, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+    }
+    if (screen){
+      fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(screen, "      - Minimize stop condition   : %s\n",  stopstr);
+      fprintf(screen, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+    }
   }
 
   // store min configuration
@@ -1059,12 +1066,14 @@ int MinARTn::find_saddle( )
         stop_condition = sad_converge(max_conv_steps); evalf += neval;
         stopstr = stopstrings(stop_condition);
 
+        double fdotf = fnorm_sqr();
         // output minimization information
         if (me == 0 && fp1){
           fprintf(fp1, "    The new saddle is now converged as:\n");
           fprintf(fp1, "      - Minimize stop condition   : %s\n",  stopstr);
           fprintf(fp1, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
           fprintf(fp1, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(fp1, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
           fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
         }
         if (me == 0 && screen){
@@ -1072,6 +1081,7 @@ int MinARTn::find_saddle( )
           fprintf(screen, "      - Minimize stop condition   : %s\n",  stopstr);
           fprintf(screen, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
           fprintf(screen, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(screen, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
           fprintf(screen, "      - # of force evaluations    : %d\n", neval);
         }
       }
