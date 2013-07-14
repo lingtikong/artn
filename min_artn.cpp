@@ -170,13 +170,15 @@ int MinARTn::push_back_sad()
   // push over the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
-  int nlocal = atom->nlocal;
+  int nlocal = atom->nlocal, n = 0;
   for (int i = 0; i < nlocal; ++i){
-    dx = xvec[3*i]   - x00[3*i];
-    dy = xvec[3*i+1] - x00[3*i+1];
-    dz = xvec[3*i+2] - x00[3*i+2];
+    dx = xvec[n]   - x00[n];
+    dy = xvec[n+1] - x00[n+1];
+    dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    hdotxx0 += h[3*i] * dx + h[3*i+1] * dy + h[3*i+2] * dz;
+    hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
+
+    n += 3;
   }
   MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
 
@@ -186,7 +188,7 @@ int MinARTn::push_back_sad()
     for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
   }
 
-  ecurrent = energy_force(1);
+  ecurrent = energy_force(1); ++evalf;
   if (me == 0) write_header(11);
 
   // do minimization with CG
@@ -210,7 +212,6 @@ int MinARTn::push_back_sad()
 
   double dr = 0., drall;
   double **x = atom->x;
-
   int n = 0;
   for (int i = 0; i < nlocal; ++i) {
     dx = x[i][0] - x00[n];
@@ -218,6 +219,7 @@ int MinARTn::push_back_sad()
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
     dr += dx*dx + dy*dy + dz*dz;
+
     n += 3;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
@@ -246,8 +248,8 @@ int MinARTn::push_back_sad()
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
 
-    ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
+   // ecurrent = energy_force(1); ++evalf;
+   // artn_reset_vec();
   }
 
 return 0;
@@ -262,12 +264,15 @@ void MinARTn::push_down()
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
   int nlocal = atom->nlocal;
+  int n = 0;
   for (int i = 0; i < nlocal; ++i){
-    dx = xvec[3*i]   - x00[3*i];
-    dy = xvec[3*i+1] - x00[3*i+1];
-    dz = xvec[3*i+2] - x00[3*i+2];
+    dx = xvec[n]   - x00[n];
+    dy = xvec[n+1] - x00[n+1];
+    dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    hdotxx0 += h[i] * dx + h[i+1] * dy + h[i+2] * dz;
+    hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
+
+    n += 3;
   }
   MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
 
