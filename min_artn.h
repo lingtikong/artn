@@ -26,6 +26,7 @@ private:
   void read_control();
 
   int min_converge(int);
+  int sad_converge(int);
   int find_saddle();
 
   void random_kick();
@@ -39,13 +40,13 @@ private:
   void lanczos(bool , int , int);
   int min_perpendicular_fire(int );
 
+  int sad_found, sad_reject;
   int ref_id, min_id, sad_id, ref_0;
   DumpAtom * dumpmin;
   DumpAtom * dumpsad;
   Compute *pressure;
 
   int me, np;
-  int vec_count;
   bigint evalf;
   bool eigen_vec_exist;
 
@@ -75,6 +76,7 @@ private:
   double increment_size;   // Overall scale for the increment moves
   int use_fire;            // use FIRE to do minimuzation in the perpendicular direction
   int flag_check_sad;      // if 1, will push back saddle point to check if it connect with the minimum
+  int flag_relax_sad;      // further relax to the newly found saddle
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
   int flag_press;          // Pressure will be calculated.
   double atom_disp_thr;    // threshold to identify whether an atom is displaced or not
