@@ -104,7 +104,7 @@ int MinARTn::iterate(int maxevent)
     double * press = pressure->vector;
     if (me == 0 && fp1){
       fprintf(fp1, "  - Pressure tensor           :");
-      for (int ii=0; ii<6; ii++) fprintf(fp1, " %g", press[ii]);
+      for (int ii=0; ii<6; ++ii) fprintf(fp1, " %g", press[ii]);
       fprintf(fp1, "\n");
     }
   }
@@ -125,15 +125,17 @@ int MinARTn::iterate(int maxevent)
 
   int ievent = 0;
   while ( 1 ){
-    stage = 1; nattempt++;
-    while (! find_saddle() ){stage = 1; nattempt++;}
+    stage = 1; ++nattempt;
+    while (! find_saddle() ){stage = 1; ++nattempt;}
 
-    if (flag_check_sad) if(! check_saddle_min() ) continue;
+    ++sad_found;
 
-    ievent++; stage++;
+    if (flag_check_sad) if(! check_saddle_min()){++sad_reject; continue;}
+
+    ++ievent; ++stage;
     if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f", ievent, ecurrent - eref);
 
-    sad_id++;
+    ++sad_id;
     if (dumpsad){
       int idum = update->ntimestep;
       update->ntimestep = sad_id;
@@ -145,11 +147,13 @@ int MinARTn::iterate(int maxevent)
     check_new_min();
 
     // output for thermo, dump, restart files
+/*
     if (output->next == ++update->ntimestep) {
       timer->stamp();
       output->write(update->ntimestep);
       timer->stamp(TIME_OUTPUT);
     }
+*/
 
     if (ievent >= max_num_events) break;
   }
@@ -165,7 +169,7 @@ return MAXITER;
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::check_saddle_min()
 {
-  stage++;
+  ++stage;
   for (int i = 0; i < nvec; ++i) {
     x_sad[i] = xvec[i];
     htmp[i]  = h[i];
@@ -224,7 +228,7 @@ int MinARTn::check_saddle_min()
       h[i]    = htmp[i];
       x0[i]   = x0tmp[i];
     }
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
     return 1;
 
@@ -237,7 +241,7 @@ int MinARTn::check_saddle_min()
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
 
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
   }
 
@@ -257,7 +261,7 @@ void MinARTn::push_down()
   if (hdotxx0all > 0.) for (int i = 0; i < nvec; ++i) xvec[i] += h[i] * push_over_saddle;
   else for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
 
-  ecurrent = energy_force(1); evalf++;
+  ecurrent = energy_force(1); ++evalf;
   if (me == 0) write_header(12);
 
   // do minimization with CG
@@ -273,7 +277,7 @@ void MinARTn::push_down()
   }
 
   // store min configuration
-  min_id++;
+  ++min_id;
   if (dumpmin){
     int idum = update->ntimestep;
     update->ntimestep = min_id;
@@ -311,7 +315,7 @@ void MinARTn::check_new_min()
     domain->minimum_image(dx,dy,dz);
     tmp = dx*dx + dy*dy + dz*dz;
     dr += tmp;
-    if(tmp > disp_thr2) n_moved++;
+    if(tmp > disp_thr2) ++n_moved;
     n += 3;
   }
   MPI_Reduce(&dr, &drall, 1, MPI_DOUBLE, MPI_SUM, 0, world);
@@ -324,7 +328,7 @@ void MinARTn::check_new_min()
 
     ++update->ntimestep;
     pressure->addstep(update->ntimestep);
-    energy_force(0); evalf++;
+    energy_force(0); ++evalf;
     pressure->compute_vector();
     double * press = pressure->vector;
 
@@ -349,7 +353,7 @@ void MinARTn::check_new_min()
     if (me == 0) write_header(14);
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
   }
 
@@ -368,6 +372,7 @@ void MinARTn::set_defaults()
 {
   seed = 12345;
   nattempt = ref_id = min_id = sad_id = 0;
+  sad_found = sad_reject = 0;
 
   // for art
   temperature      = 0.5;
@@ -376,6 +381,7 @@ void MinARTn::set_defaults()
   increment_size   = 0.09;
   use_fire         = 0;
   flag_check_sad   = 0;
+  flag_relax_sad   = 0;
   max_disp_tol     = 0.1;
   flag_press       = 0;
   atom_disp_thr    = 0.1;
@@ -537,6 +543,9 @@ void MinARTn::read_control()
     } else if (!strcmp(token1, "flag_check_sad")){
       flag_check_sad = atoi(token2);
 
+    } else if (!strcmp(token1, "flag_relax_sad")){
+      flag_relax_sad = atoi(token2);
+
     } else if (!strcmp(token1, "max_disp_tol")){
       max_disp_tol = atof(token2);
       if (max_disp_tol <= 0.) error->all(FLERR, "max_disp_tol must be greater than 0.");
@@ -651,6 +660,7 @@ void MinARTn::read_control()
     fprintf(fp1, "force_th_perp_sad %20g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
     fprintf(fp1, "\n");
     fprintf(fp1, "flag_check_sad    %20d  # %s\n", flag_check_sad, "Push back the saddle to confirm its link with the initial min");
+    fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
     fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
     fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
@@ -716,7 +726,7 @@ void MinARTn::artn_init()
   memory->create(delpos, MAX(1,nvec), "delpos");
 
   // peratom vector I use
-  vec_count = 3;
+  int vec_count = 2;
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
@@ -724,13 +734,13 @@ void MinARTn::artn_init()
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
   fix_minimize->add_vector(3);
-  x0tmp = fix_minimize->request_vector(vec_count++);	//3
-  h_old = fix_minimize->request_vector(vec_count++);	//4
-  egvec = fix_minimize->request_vector(vec_count++);  //5
-  x00   = fix_minimize->request_vector(vec_count++);	//6
-  fperp = fix_minimize->request_vector(vec_count++);	//7
-  htmp  = fix_minimize->request_vector(vec_count++);	//8
-  x_sad = fix_minimize->request_vector(vec_count++);  //9
+  x0tmp = fix_minimize->request_vector(++vec_count);	//3
+  h_old = fix_minimize->request_vector(++vec_count);	//4
+  egvec = fix_minimize->request_vector(++vec_count);  //5
+  x00   = fix_minimize->request_vector(++vec_count);	//6
+  fperp = fix_minimize->request_vector(++vec_count);	//7
+  htmp  = fix_minimize->request_vector(++vec_count);	//8
+  x_sad = fix_minimize->request_vector(++vec_count);  //9
 
   // group list
   int *tag  = atom->tag;
@@ -739,7 +749,7 @@ void MinARTn::artn_init()
   int *llist; memory->create(llist, MAX(1,nlocal), "llist");
 
   int n = 0;
-  for (int i = 0; i < nlocal; i++) if (mask[i] & groupbit) llist[n++] = tag[i];
+  for (int i = 0; i < nlocal; ++i) if (mask[i] & groupbit) llist[n++] = tag[i];
 
   int nsingle = n, nall;
   MPI_Allreduce(&nsingle,&nall,1,MPI_INT,MPI_SUM,world);
@@ -749,9 +759,9 @@ void MinARTn::artn_init()
 
   int *disp = new int [np];
   int *recv = new int [np];
-  for (int i=0; i < np; i++) disp[i] = recv[i] = 0;
+  for (int i=0; i < np; ++i) disp[i] = recv[i] = 0;
   MPI_Gather(&nsingle,1,MPI_INT,recv,1,MPI_INT,0,world);
-  for (int i=1; i < np; i++) disp[i] = disp[i-1] + recv[i-1];
+  for (int i=1; i < np; ++i) disp[i] = disp[i-1] + recv[i-1];
 
   MPI_Gatherv(llist,nsingle,MPI_INT,glist,recv,disp,MPI_INT,0,world);
   delete [] disp;
@@ -799,7 +809,7 @@ int MinARTn::find_saddle( )
 
   eigenvalue = 0.;
   eigen_vec_exist = 0;
-  for (int i = 0; i < nvec; i++) x0[i] = x00[i] = xvec[i];
+  for (int i = 0; i < nvec; ++i) x0[i] = x00[i] = xvec[i];
 
   // randomly displace the desired atoms: activation
   random_kick();
@@ -809,9 +819,9 @@ int MinARTn::find_saddle( )
   int nmax_perp = max_perp_move_h;
 
   // try to leave harmonic well
-  for (int local_iter = 0; local_iter < max_iter_basin; local_iter++){
+  for (int it = 0; it < max_iter_basin; ++it){
     // minimizing perpendicularly by using SD method
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
 
     m_perp = nfail = trial = 0;
@@ -819,11 +829,11 @@ int MinARTn::find_saddle( )
     while ( 1 ){
       preenergy = ecurrent;
       fdoth = 0.;
-      for (int i = 0; i < nvec; i++) fdoth += fvec[i] * h[i];
+      for (int i = 0; i < nvec; ++i) fdoth += fvec[i] * h[i];
       MPI_Allreduce(&fdoth, &fdothall,1,MPI_DOUBLE,MPI_SUM,world);
       fperp2 = 0.;
       
-      for (int i = 0; i < nvec; i++){ 
+      for (int i = 0; i < nvec; ++i){ 
         fperp[i] = fvec[i] - fdothall * h[i];
         fperp2 += fperp[i] * fperp[i];
       }
@@ -834,22 +844,21 @@ int MinARTn::find_saddle( )
         x0tmp[i] = xvec[i];
         xvec[i] += step * fperp[i];
       }
-      ecurrent = energy_force(1); evalf++;
+      ecurrent = energy_force(1); ++evalf;
       artn_reset_vec(); reset_coords();
       
       if (ecurrent < preenergy){
         step *= 1.2;
-        m_perp++;
-        nfail = 0;
+        ++m_perp; nfail = 0;
         preenergy = ecurrent;
 
       } else {
         for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
-        step *= 0.6; nfail++;
-        ecurrent = energy_force(1); evalf++;
+        step *= 0.6; ++nfail;
+        ecurrent = energy_force(1); ++evalf;
         artn_reset_vec(); reset_coords();
       }
-      trial++;
+      ++trial;
     }
     
     ftot = delr = 0.;
@@ -862,7 +871,7 @@ int MinARTn::find_saddle( )
     MPI_Reduce(tmp_me, tmp_all,2,MPI_DOUBLE,MPI_SUM,0,world);
     ftotall = tmp_all[0]; delr = tmp_all[1];
     
-    if (local_iter > min_num_ksteps) lanczos(!eigen_vec_exist, 1, num_lancz_vec_h);
+    if (it > min_num_ksteps) lanczos(!eigen_vec_exist, 1, num_lancz_vec_h);
     
     fpar2 = 0.;
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
@@ -872,17 +881,17 @@ int MinARTn::find_saddle( )
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(ftotall);
       delr   = sqrt(delr);
-      if (fp1 && log_level && local_iter%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+      if (fp1 && log_level && it%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
-      if (screen && local_iter%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+      if (screen && it%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
       ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
     }
     
-    if (local_iter > min_num_ksteps && eigenvalue < eigen_th_well){
+    if (it > min_num_ksteps && eigenvalue < eigen_th_well){
       if (me == 0){
-        if (fp1 && log_level && local_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+        if (fp1 && log_level && it%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
         ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
-        if (screen && local_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", local_iter,
+        if (screen && it%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
         ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, eigenvalue, delr, evalf);
       
         write_header(4);
@@ -893,7 +902,7 @@ int MinARTn::find_saddle( )
     }
     
     // push along the search direction
-    step = basin_factor * increment_size * MAX(-1.e-2, MIN(2., -fpar2all));
+    step = basin_factor * increment_size * MAX(-0.1, MIN(2., -fpar2all));
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
@@ -907,13 +916,13 @@ int MinARTn::find_saddle( )
       write_header(5);
     }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec(); reset_coords();
 
     return 0;
   }
 
-  flag = 0; stage++;
+  flag = 0; ++stage;
 
   if (me == 0) write_header(6);
 
@@ -921,7 +930,7 @@ int MinARTn::find_saddle( )
 
   // now try to move close to the saddle point according to the egvec.
   int inc = 0;
-  for (int saddle_iter = 0; saddle_iter < max_activat_iter; ++saddle_iter){
+  for (int it_s = 0; it_s < max_activat_iter; ++it_s){
 
     for (int i = 0; i < nvec; ++i) h_old[i] = h[i];
 
@@ -942,19 +951,19 @@ int MinARTn::find_saddle( )
     // do minimizing perpendicular use SD or FIRE
     if (use_fire) {
       m_perp = trial = 0;
-      min_perpendicular_fire(MIN(50, saddle_iter + 18));
+      min_perpendicular_fire(MIN(50, it_s + 18));
 
     } else {
       m_perp = trial = nfail = 0;
       step = increment_size * 0.4;
-      int max_perp = max_perp_moves_c + saddle_iter + inc;
+      int max_perp = max_perp_moves_c + it_s + inc;
       while ( 1 ){
         preenergy = ecurrent;
         fdoth = 0.;
-        for (int i = 0; i < nvec; i++) fdoth += fvec[i] * h[i];
+        for (int i = 0; i < nvec; ++i) fdoth += fvec[i] * h[i];
         MPI_Allreduce(&fdoth, &fdothall,1,MPI_DOUBLE,MPI_SUM,world);
         fperp2 = 0.;
-        for (int i = 0; i < nvec; i++){
+        for (int i = 0; i < nvec; ++i){
           fperp[i] = fvec[i] - fdothall * h[i];
           fperp2 += fperp[i] * fperp[i];
         }
@@ -967,24 +976,22 @@ int MinARTn::find_saddle( )
           x0tmp[i] = xvec[i];
           xvec[i] += step * fperp[i];
         }
-        ecurrent = energy_force(1); evalf++;
+        ecurrent = energy_force(1); ++evalf;
         artn_reset_vec(); reset_coords();
         
         if (ecurrent < preenergy){
           step *= 1.2;
-          m_perp++; nfail = 0;
+          ++m_perp; nfail = 0;
           preenergy = ecurrent;
         
         } else {
         
           for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
-        
-          step *= 0.6;
-          nfail++;
-          ecurrent = energy_force(1); evalf++;
+          step *= 0.6; ++nfail;
+          ecurrent = energy_force(1); ++evalf;
           artn_reset_vec();
         }
-        trial++;
+        ++trial;
       }
     }
         
@@ -1001,7 +1008,6 @@ int MinARTn::find_saddle( )
     // output information
     fpar2 = 0.;
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
-  
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     if (fpar2all > -1.) inc = 10;
 
@@ -1015,19 +1021,18 @@ int MinARTn::find_saddle( )
     if (me == 0){
       delr = sqrt(delr);
       fperp2 = sqrt(fperp2all);
-      if (fp1 && log_level && saddle_iter%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
-      if (screen && saddle_iter%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+      it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+      if (screen && it_s%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+      it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
     }
-   
    
     if (eigenvalue > eigen_th_fail){
       if (me == 0){
-        if (fp1 && log_level && saddle_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
-        if (screen && saddle_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
  
         write_header(7);
       }
@@ -1035,26 +1040,52 @@ int MinARTn::find_saddle( )
       for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   
       return 0;
-     }
+    }
   
     if (ftotall < force_th_saddle){
       if (me == 0){
-        if (fp1 && log_level && saddle_iter%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
-        if (screen && saddle_iter%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        saddle_iter, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
+        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
+        it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, eigenvalue, delr, evalf, hdotall);
 
          write_header(8);
       }
 
-      return 1;
+      if ( flag_relax_sad ){
+        ++stage;
+        if (me == 0) write_header(10);
+
+        stop_condition = sad_converge(max_conv_steps); evalf += neval;
+        stopstr = stopstrings(stop_condition);
+
+        // output minimization information
+        if (me == 0 && fp1){
+          fprintf(fp1, "    The new saddle is now converged as:\n");
+          fprintf(fp1, "      - Minimize stop condition   : %s\n",  stopstr);
+          fprintf(fp1, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+          fprintf(fp1, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
+        }
+        if (me == 0 && screen){
+          fprintf(screen, "    The new saddle is now converged as:\n");
+          fprintf(screen, "      - Minimize stop condition   : %s\n",  stopstr);
+          fprintf(screen, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+          fprintf(screen, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(screen, "      - # of force evaluations    : %d\n", neval);
+        }
+      }
+
+      return stop_condition;
     }
   
+    // caculate egvec use lanczos
+    lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
 #define MinEGV 0.1 // was 0.5
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(eigenvalue), MinEGV));
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec(); reset_coords();
   }
 
@@ -1068,7 +1099,7 @@ int MinARTn::find_saddle( )
   }
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-  ecurrent = energy_force(1); evalf++;
+  ecurrent = energy_force(1); ++evalf;
   artn_reset_vec(); reset_coords();
 
 return 0;
@@ -1087,7 +1118,7 @@ void MinARTn::reset_coords()
   double dx,dy,dz,dx0,dy0,dz0;
 
   int n = 0;
-  for (int i = 0; i < nlocal; i++) {
+  for (int i = 0; i < nlocal; ++i) {
     dx = dx0 = x[i][0] - x0[n];
     dy = dy0 = x[i][1] - x0[n+1];
     dz = dz0 = x[i][2] - x0[n+2];
@@ -1128,30 +1159,30 @@ void MinARTn::random_kick()
   int nhit = 0;
 
   if (abs(cluster_radius) < ZERO){ // only the cord atom will be kicked
-    for (int i = 0; i<nlocal; i++){
+    for (int i = 0; i<nlocal; ++i){
       if (tag[i] == that){
         delpos[i*3]   = 0.5 - random->uniform();
         delpos[i*3+1] = 0.5 - random->uniform();
         delpos[i*3+2] = 0.5 - random->uniform();
 
-        nhit++; break;
+        ++nhit; break;
       }
     }
 
   } else if (cluster_radius < 0.){ // all atoms in group will be kicked
-    for (int i = 0; i < nlocal; i++){
+    for (int i = 0; i < nlocal; ++i){
       if (groupbit & atom->mask[i]){
         delpos[i*3]   = 0.5 - random->uniform();
         delpos[i*3+1] = 0.5 - random->uniform();
         delpos[i*3+2] = 0.5 - random->uniform();
 
-        nhit++;
+        ++nhit;
       }
     }
 
   } else { // only atoms in group and within a radius to the central atom will be kicked
     double one[3]; one[0] = one[1] = one[2] = 0.;
-    for (int i = 0; i < nlocal; i++){
+    for (int i = 0; i < nlocal; ++i){
       if (tag[i] == that){
         one[0] = atom->x[i][0];
         one[1] = atom->x[i][1];
@@ -1160,7 +1191,7 @@ void MinARTn::random_kick()
     }
     MPI_Allreduce(&one[0], &cord[0], 3, MPI_DOUBLE, MPI_SUM, world);
     double rcut2 = cluster_radius * cluster_radius;
-    for (int i = 0; i < nlocal; i++){
+    for (int i = 0; i < nlocal; ++i){
       if (groupbit & atom->mask[i]){
         double dx = atom->x[i][0] - cord[0];
         double dy = atom->x[i][1] - cord[1];
@@ -1172,7 +1203,7 @@ void MinARTn::random_kick()
           delpos[i*3+1] = 0.5 - random->uniform();
           delpos[i*3+2] = 0.5 - random->uniform();
 
-          nhit++;
+          ++nhit;
         }
       }
     }
@@ -1185,7 +1216,7 @@ void MinARTn::random_kick()
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
 
   double norm_i = 1./sqrt(normall);
-  for (int i=0; i < nvec; i++){
+  for (int i=0; i < nvec; ++i){
     h[i] = delpos[i] * norm_i;
     xvec[i] += init_step_size * h[i];
   }
@@ -1215,17 +1246,16 @@ int MinARTn::min_converge(int maxiter)
 
   // initialize working vectors
 
-  eprevious = ecurrent = energy_force(1); neval++;
-  for (i = 0; i < nvec; i++) h[i] = g[i] = fvec[i];
+  eprevious = ecurrent = energy_force(1); ++neval;
+  for (i = 0; i < nvec; ++i) h[i] = g[i] = fvec[i];
 
   gg = fnorm_sqr();
   ntimestep = 0;
 
   niter = 0;
-  for (int iter = 0; iter < maxiter; iter++) {
+  for (int iter = 0; iter < maxiter; ++iter) {
     //ntimestep = ++update->ntimestep;
-    ++ ntimestep;
-    niter++;
+    ++ ntimestep; ++niter;
 
     // line minimization along direction h from current atom->x
     fail = (this->*linemin)(ecurrent,alpha_final);
@@ -1241,7 +1271,7 @@ int MinARTn::min_converge(int maxiter)
     // force tolerance criterion
 
     dot[0] = dot[1] = 0.0;
-    for (i = 0; i < nvec; i++) {
+    for (i = 0; i < nvec; ++i) {
       dot[0] += fvec[i]*fvec[i];
       dot[1] += fvec[i]*g[i];
     }
@@ -1261,7 +1291,7 @@ int MinARTn::min_converge(int maxiter)
     if ((niter+1) % nlimit == 0) beta = 0.;
     gg = dotall[0];
 
-    for (i = 0; i < nvec; i++) {
+    for (i = 0; i < nvec; ++i) {
       g[i] = fvec[i];
       h[i] = g[i] + beta*h[i];
     }
@@ -1272,10 +1302,10 @@ int MinARTn::min_converge(int maxiter)
     // not push_down
 
     dot[0] = 0.;
-    for (i = 0; i < nvec; i++) dot[0] += g[i]*h[i];
+    for (i = 0; i < nvec; ++i) dot[0] += g[i]*h[i];
     MPI_Allreduce(dot,dotall,1,MPI_DOUBLE,MPI_SUM,world);
 
-    if (dotall[0] <= 0.) for (i = 0; i < nvec; i++) h[i] = g[i];
+    if (dotall[0] <= 0.) for (i = 0; i < nvec; ++i) h[i] = g[i];
   }
 
 return MAXITER;
@@ -1290,7 +1320,7 @@ return MAXITER;
 void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   FixMinimize * fix_lanczos;
   char **fixarg = new char*[3];
-  fixarg[0] = (char *) "lanczos";
+  fixarg[0] = (char *) "artn_lanczos";
   fixarg[1] = (char *) "all";
   fixarg[2] = (char *) "MINIMIZE";
   modify->add_fix(3,fixarg);
@@ -1325,8 +1355,8 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   const double IDEL_LANCZOS = 1.0 / DEL_LANCZOS;
 
   // set r(k-1) according to egvec or random vector
-  if (! new_projection) for (int i = 0; i<nvec; i++) r_k_1[i] = egvec[i];
-  else for (int i = 0; i<nvec; i++) r_k_1[i] = 0.5 - random->uniform();
+  if (! new_projection) for (int i = 0; i<nvec; ++i) r_k_1[i] = egvec[i];
+  else for (int i = 0; i<nvec; ++i) r_k_1[i] = 0.5 - random->uniform();
   for (int i =0; i< nvec; ++i) beta_k_1 += r_k_1[i] * r_k_1[i];
 
   MPI_Allreduce(&beta_k_1,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
@@ -1340,7 +1370,7 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   work = new double [2*maxvec];
 
   // store origin configuration and force
-  for (int i=0; i<nvec; i++){
+  for (int i=0; i<nvec; ++i){
     x0tmp[i] = xvec[i];
     g[i] = fvec[i];
   }
@@ -1385,7 +1415,7 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
     beta_k = sqrt(tmp);
     d[n-1] = alpha_k;
     e[n-1] = beta_k;
-    for (int i = 0; i != maxvec; i++){
+    for (int i = 0; i != maxvec; ++i){
       d_bak[i] = d[i];
       e_bak[i] = e[i];
     }
@@ -1405,13 +1435,13 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
       eigenvalue = eigen2;
       if (flag > 0){
         eigen_vec_exist = 1;
-        for (int i=0; i < nvec; i++) egvec[i] = 0.;
-        for (int i=0; i<nvec; i++)
-        for (int j=0; j<n; j++) egvec[i] += z[j] * lanc[j][i];
+        for (int i=0; i < nvec; ++i) egvec[i] = 0.;
+        for (int i=0; i<nvec; ++i)
+        for (int j=0; j<n; ++j) egvec[i] += z[j] * lanc[j][i];
 
         // normalize egvec.
         double sum = 0., sumall;
-        for (int i = 0; i < nvec; i++) sum += egvec[i] * egvec[i];
+        for (int i = 0; i < nvec; ++i) sum += egvec[i] * egvec[i];
         
         MPI_Allreduce(&sum, &sumall,1,MPI_DOUBLE,MPI_SUM,world);
         sumall = 1. / sqrt(sumall);
@@ -1443,7 +1473,7 @@ void MinARTn::lanczos(bool new_projection, int flag, int maxvec){
   delete []work;
   delete []lanc;
 
-  modify->delete_fix("lanczos");
+  modify->delete_fix("artn_lanczos");
 
 return;
 }
@@ -1534,7 +1564,7 @@ int MinARTn::min_perpendicular_fire(int maxiter)
     double dtf = dt * force->ftm2v;
     int nlocal = atom->nlocal;
     if (rmass) {
-      for (int i = 0; i < nlocal; i++) {
+      for (int i = 0; i < nlocal; ++i) {
         dtfm = dtf / rmass[i];
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
@@ -1544,7 +1574,7 @@ int MinARTn::min_perpendicular_fire(int maxiter)
         v[i][2] += dtfm * fperp[3*i+2];
       }
     } else {
-      for (int i = 0; i < nlocal; i++) {
+      for (int i = 0; i < nlocal; ++i) {
         dtfm = dtf / mass[type[i]];
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
@@ -1555,7 +1585,7 @@ int MinARTn::min_perpendicular_fire(int maxiter)
       }
     }
     eprevious = ecurrent;
-    ecurrent = energy_force(1); evalf++;
+    ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
   }
 
@@ -1572,7 +1602,8 @@ void MinARTn::artn_final()
       fprintf(fp1, "\n");
       fprintf(fp1, "==========================================================================================\n");
       fprintf(fp1, "# Total number of ARTn attempts : %d\n", nattempt);
-      fprintf(fp1, "# Number of new saddle found    : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
+      fprintf(fp1, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
+      fprintf(fp1, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
       fprintf(fp1, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(fp1, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
@@ -1586,7 +1617,8 @@ void MinARTn::artn_final()
       fprintf(screen, "\n");
       fprintf(screen, "==========================================================================================\n");
       fprintf(screen, "# Total number of ARTn attempts : %d\n", nattempt);
-      fprintf(screen, "# Number of new saddle found    : %d (%g%% success)\n", sad_id, double(sad_id)/double(MAX(1,nattempt))*100.);
+      fprintf(screen, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
+      fprintf(screen, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
       fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(screen, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
@@ -1705,6 +1737,10 @@ void MinARTn::write_header(const int flag)
       fprintf(screen, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
     }
 
+  } else if (flag == 10){
+    if (fp1) fprintf(fp1, "  Stage %d, further relax the newly found saddle ...\n", stage);
+    if (screen) fprintf(screen, "  Stage %d, further relax the newly found saddle ...\n", stage);
+
   } else if (flag == 11){
     if (fp1) fprintf(fp1, "  Stage %d, puch back the saddle to confirm sad-%d is linked with min-%d\n", stage, sad_id, ref_id);
     if (screen) fprintf(screen, "  Stage %d, puch back the saddle to confirm sad-%d is linked with min-%d\n", stage, sad_id, ref_id);
@@ -1723,5 +1759,58 @@ void MinARTn::write_header(const int flag)
   }
 
 return;
+}
+
+int MinARTn::sad_converge(int maxiter)
+{
+  neval = 0;
+  int i,fail,ntimestep;
+  double edf, edf_all;
+
+  // initialize working vectors
+  eprevious = ecurrent = energy_force(1); ++neval;
+  // caculate eigenvector by using lanczos
+  eigen_vec_exist = 0;
+  lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
+
+  edf = 0.;
+  for (i =0; i < nvec; ++i) edf += egvec[i] * fvec[i];
+  MPI_Allreduce(&edf, &edf_all,1,MPI_DOUBLE,MPI_SUM,world);
+
+  for (i = 0; i < nvec; ++i) h[i] = fvec[i] - 2.*edf_all*egvec[i];
+
+  for (int iter = 0; iter < maxiter; ++iter) {
+    //ntimestep = ++update->ntimestep;
+    ++niter;
+
+    // line minimization along h from current position x
+    // h = downhill gradient direction
+    eprevious = ecurrent;
+    fail = (this->*linemin)(ecurrent,alpha_final);
+    if (fail) return fail;
+
+    // function evaluation criterion
+    if (neval >= update->max_eval) return MAXEVAL;
+
+    // energy tolerance criterion
+
+    if (fabs(ecurrent-eprevious) <
+        update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY))
+      return ETOL;
+
+    // force tolerance criterion
+    double fdotf = fnorm_sqr();
+    if (fdotf < update->ftol*update->ftol) return FTOL;
+
+    // set new search direction h to f = -Grad(x)
+    lanczos(!eigen_vec_exist, 1, num_lancz_vec_c);
+    edf = 0.;
+    for (i =0; i < nvec; ++i) edf += egvec[i] * fvec[i];
+    MPI_Allreduce(&edf, &edf_all,1,MPI_DOUBLE,MPI_SUM,world);
+
+    for (i = 0; i < nvec; ++i) h[i] = fvec[i] - 2.*edf_all*egvec[i];
+  }
+
+  return MAXITER;
 }
 /* ---------------------------------------------------------------------------------------------- */
