@@ -25,22 +25,22 @@ private:
   void artn_init();
   void read_control();
 
-  int min_converge(int);
-  int sad_converge(int);
-  int find_saddle();
-
   void random_kick();
 
-  int check_saddle_min();
+  int find_saddle();
+  int min_converge(int);
+  int sad_converge(int);
+
+  int push_back_sad();
   void push_down();
   void check_new_min();
 
   void artn_reset_vec();
   void reset_coords();
-  void lanczos(bool , int , int);
-  int min_perpendicular_fire(int );
+  void lanczos(bool, int, int);
+  int min_perp_fire(int);
 
-  int sad_found, sad_reject;
+  int sad_found;
   int ref_id, min_id, sad_id, ref_0;
   DumpAtom * dumpmin;
   DumpAtom * dumpsad;
@@ -48,11 +48,11 @@ private:
 
   int me, np;
   bigint evalf;
-  bool eigen_vec_exist;
+  bool flag_egvec;
 
   double eref;
 
-  double eigenvalue;
+  double egval;
   double *egvec;
   double *x0tmp;
   double *x00;
