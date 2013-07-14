@@ -1244,7 +1244,7 @@ return;
 int MinARTn::min_converge(int maxiter)
 {
   neval = 0;
-  int i,fail,ntimestep;
+  int i,fail;
   double beta,gg,dot[2],dotall[2];
 
   // nlimit = max # of CG iterations before restarting
@@ -1257,12 +1257,10 @@ int MinARTn::min_converge(int maxiter)
   for (i = 0; i < nvec; ++i) h[i] = g[i] = fvec[i];
 
   gg = fnorm_sqr();
-  ntimestep = 0;
 
   niter = 0;
   for (int iter = 0; iter < maxiter; ++iter) {
-    //ntimestep = ++update->ntimestep;
-    ++ ntimestep; ++niter;
+    ++niter;
 
     // line minimization along direction h from current atom->x
     fail = (this->*linemin)(ecurrent,alpha_final);
@@ -1775,7 +1773,7 @@ return;
 int MinARTn::sad_converge(int maxiter)
 {
   neval = 0;
-  int i,fail,ntimestep;
+  int i,fail;
   double edf, edf_all;
 
   // initialize working vectors
