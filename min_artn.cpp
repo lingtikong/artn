@@ -169,7 +169,15 @@ int MinARTn::push_back_sad()
 
   // push over the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
-  for (int i = 0; i < nvec; ++i) hdotxx0 += h[i] * (xvec[i] - x0[i]);
+  double dx, dy, dz;
+  int nlocal = atom->nlocal;
+  for (int i = 0; i < nlocal; ++i){
+    dx = xvec[3*i]   - x00[3*i];
+    dy = xvec[3*i+1] - x00[3*i+1];
+    dz = xvec[3*i+2] - x00[3*i+2];
+    domain->minimum_image(dx,dy,dz);
+    hdotxx0 += h[3*i] * dx + h[3*i+1] * dy + h[3*i+2] * dz;
+  }
   MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
 
   if (hdotxx0all < 0.){
@@ -187,29 +195,35 @@ int MinARTn::push_back_sad()
   artn_reset_vec();
 
   // output minimization information
-  if (me == 0 && fp1){
-    fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
-    fprintf(fp1, "    - Current (ref) energy (eV) : %lg\n", ecurrent);
+  if (me == 0){
+    if (fp1) {
+      fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
+      fprintf(fp1, "    - Current energy (eV)       : %lg\n", ecurrent);
+      fprintf(fp1, "    - Reference energy (ev)     : %lg\m", eref);
+    }
+    if (screen) {
+      fprintf(screen, "    - Minimize stop condition   : %s\n",  stopstr);
+      fprintf(screen, "    - Current energy (eV)       : %lg\n", ecurrent);
+      fprintf(screen, "    - Reference energy (ev)     : %lg\n", eref);
+    }
   }
 
   double dr = 0., drall;
   double **x = atom->x;
-  double *x0 = fix_minimize->request_vector(6);
-  int nlocal = atom->nlocal;
-  double dx,dy,dz;
 
   int n = 0;
   for (int i = 0; i < nlocal; ++i) {
-    dx = x[i][0] - x0[n];
-    dy = x[i][1] - x0[n+1];
-    dz = x[i][2] - x0[n+2];
+    dx = x[i][0] - x00[n];
+    dy = x[i][1] - x00[n+1];
+    dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
     dr += dx*dx + dy*dy + dz*dz;
     n += 3;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
+  drall = sqrt(drall);
 
-  if (drall < max_disp_tol*max_disp_tol) {
+  if (drall < max_disp_tol) {
     if (me == 0){
       if (fp1) fprintf(fp1, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
       if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
@@ -246,7 +260,15 @@ void MinARTn::push_down()
 {
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
-  for (int i = 0; i < nvec; ++i) hdotxx0 += h[i] * (xvec[i] - x0[i]);
+  double dx, dy, dz;
+  int nlocal = atom->nlocal;
+  for (int i = 0; i < nlocal; ++i){
+    dx = xvec[3*i]   - x00[3*i];
+    dy = xvec[3*i+1] - x00[3*i+1];
+    dz = xvec[3*i+2] - x00[3*i+2];
+    domain->minimum_image(dx,dy,dz);
+    hdotxx0 += h[i] * dx + h[i+1] * dy + h[i+2] * dz;
+  }
   MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
 
   if (hdotxx0all > 0.) for (int i = 0; i < nvec; ++i) xvec[i] += h[i] * push_over_saddle;
@@ -296,11 +318,9 @@ void MinARTn::check_new_min()
 
   double dr = 0., drall;
   double **x = atom->x;
-  double *x0 = fix_minimize->request_vector(6);
   int nlocal = atom->nlocal;
   double dx,dy,dz;
   double tmp_me[2], tmp_all[2]; tmp_all[0] = tmp_all[1] = 0.;
-
   int n = 0;
 
   // calculate dr
@@ -308,9 +328,9 @@ void MinARTn::check_new_min()
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
   int n_moved = 0, n_movedall;
   for (int i = 0; i < nlocal; ++i) {
-    dx = x[i][0] - x0[n];
-    dy = x[i][1] - x0[n+1];
-    dz = x[i][2] - x0[n+2];
+    dx = x[i][0] - x00[n];
+    dy = x[i][1] - x00[n+1];
+    dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
     tmp = dx*dx + dy*dy + dz*dz;
     dr += tmp;
@@ -952,7 +972,7 @@ int MinARTn::find_saddle( )
     // do minimizing perpendicular use SD or FIRE
     if (use_fire) {
       m_perp = trial = 0;
-      min_perp_fire(MIN(50, it_s + 18));
+      min_perp_fire(MIN(60, it_s + 40));
 
     } else {
       m_perp = trial = nfail = 0;
@@ -1120,20 +1140,19 @@ void MinARTn::reset_coords()
   domain->set_global_box();
 
   double **x = atom->x;
-  double *x0 = fix_minimize->request_vector(3);
   int nlocal = atom->nlocal;
   double dx,dy,dz,dx0,dy0,dz0;
 
   int n = 0;
   for (int i = 0; i < nlocal; ++i) {
-    dx = dx0 = x[i][0] - x0[n];
-    dy = dy0 = x[i][1] - x0[n+1];
-    dz = dz0 = x[i][2] - x0[n+2];
+    dx = dx0 = x[i][0] - x0tmp[n];
+    dy = dy0 = x[i][1] - x0tmp[n+1];
+    dz = dz0 = x[i][2] - x0tmp[n+2];
     domain->minimum_image(dx,dy,dz);
 
-    if (abs(dx - dx0) > ZERO) x0[n]   = x[i][0] - dx;
-    if (abs(dy - dy0) > ZERO) x0[n+1] = x[i][1] - dy;
-    if (abs(dz - dz0) > ZERO) x0[n+2] = x[i][2] - dz;
+    if (abs(dx - dx0) > ZERO) x0tmp[n]   = x[i][0] - dx;
+    if (abs(dy - dy0) > ZERO) x0tmp[n+1] = x[i][1] - dy;
+    if (abs(dz - dz0) > ZERO) x0tmp[n+2] = x[i][2] - dz;
     n += 3;
   }
 
