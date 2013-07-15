@@ -895,6 +895,8 @@ int MinARTn::find_saddle( )
 
   egval = 0.;
   flag_egvec = 0;
+
+  // record the original atomic positions
   for (int i = 0; i < nvec; ++i) x0[i] = x00[i] = xvec[i];
 
   // randomly displace the desired atoms: activation
@@ -1003,7 +1005,7 @@ int MinARTn::find_saddle( )
     }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec(); reset_coords();
+    artn_reset_vec();
 
     return 0;
   }
@@ -1192,7 +1194,7 @@ int MinARTn::find_saddle( )
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   ecurrent = energy_force(1); ++evalf;
-  artn_reset_vec(); reset_coords();
+  artn_reset_vec();
 
 return 0;
 }
@@ -1593,10 +1595,14 @@ int MinARTn::min_perp_fire(int maxiter)
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
+    eprevious = ecurrent;
+    ecurrent = energy_force(1); ++evalf;
+    artn_reset_vec();
+
     fdoth = 0.;
     for (int i = 0; i < nvec; ++i) fdoth += fvec[i] * h[i];
-    
     MPI_Allreduce(&fdoth,&fdothall,1,MPI_DOUBLE,MPI_SUM,world);
+
     for (int i = 0; i < nvec; ++i) fperp[i] = fvec[i] - fdothall * h[i];
     
     //double fperpmax = 0., fperpmaxall;
@@ -1617,14 +1623,15 @@ int MinARTn::min_perp_fire(int maxiter)
     // if more than DELAYSTEP since v dot f was negative:
     // increase timestep and decrease alpha
     if (vdotfall > 0.) {
+      double tmp_me[2], tmp_all[2];
       scale1 = 1. - alpha;
-      vdotv = fdotf = 0.;
+      tmp_me[0] = tmp_me[1] = 0.;
       for (int i = 0; i < nvec; ++i) {
-        vdotv += vvec[i] * vvec[i];
-        fdotf += fperp[i] * fperp[i];
+        tmp_me[0] += vvec[i] * vvec[i];
+        tmp_me[1] += fperp[i] * fperp[i];
       }
-      MPI_Allreduce(&vdotv,&vdotvall,1,MPI_DOUBLE,MPI_SUM,world);
-      MPI_Allreduce(&fdotf,&fdotfall,1,MPI_DOUBLE,MPI_SUM,world);
+      MPI_Allreduce(tmp_me, tmp_all,2,MPI_DOUBLE,MPI_SUM,world);
+      vdotvall = tmp_all[0]; fdotfall = tmp_all[1];
       
       if (fdotfall < force_thr2) return 1;
 
@@ -1672,9 +1679,6 @@ int MinARTn::min_perp_fire(int maxiter)
         v[i][2] += dtfm * fperp[3*i+2];
       }
     }
-    eprevious = ecurrent;
-    ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
   }
 
 return 0;
@@ -1688,7 +1692,7 @@ void MinARTn::artn_final()
   if (me == 0){
     if (fp1){
       fprintf(fp1, "\n");
-      fprintf(fp1, "==========================================================================================\n");
+      fprintf(fp1, "#=========================================================================================\n");
       fprintf(fp1, "# Total number of ARTn attempts : %d\n", nattempt);
       fprintf(fp1, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
       fprintf(fp1, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
@@ -1696,7 +1700,7 @@ void MinARTn::artn_final()
       fprintf(fp1, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(fp1, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
-      fprintf(fp1, "==========================================================================================\n");
+      fprintf(fp1, "#=========================================================================================\n");
       fclose(fp1); fp1 = NULL;
     }
    
@@ -1704,7 +1708,7 @@ void MinARTn::artn_final()
 
     if (screen){
       fprintf(screen, "\n");
-      fprintf(screen, "==========================================================================================\n");
+      fprintf(screen, "#=========================================================================================\n");
       fprintf(screen, "# Total number of ARTn attempts : %d\n", nattempt);
       fprintf(screen, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
@@ -1712,7 +1716,7 @@ void MinARTn::artn_final()
       fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(screen, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
-      fprintf(screen, "==========================================================================================\n");
+      fprintf(screen, "#=========================================================================================\n");
     }
   }
 
