@@ -188,7 +188,7 @@ int MinARTn::push_back_sad()
     for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
   }
 
-  ecurrent = energy_force(1); ++evalf;
+  //ecurrent = energy_force(1); ++evalf;
   if (me == 0) write_header(11);
 
   // do minimization with CG
@@ -201,12 +201,12 @@ int MinARTn::push_back_sad()
     if (fp1) {
       fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
       fprintf(fp1, "    - Current energy (eV)       : %lg\n", ecurrent);
-      fprintf(fp1, "    - Reference energy (ev)     : %lg\m", eref);
+      fprintf(fp1, "    - Reference energy (eV)     : %lg\n", eref);
     }
     if (screen) {
       fprintf(screen, "    - Minimize stop condition   : %s\n",  stopstr);
       fprintf(screen, "    - Current energy (eV)       : %lg\n", ecurrent);
-      fprintf(screen, "    - Reference energy (ev)     : %lg\n", eref);
+      fprintf(screen, "    - Reference energy (eV)     : %lg\n", eref);
     }
   }
   if ( fabs(ecurrent - eref) > 0.1) {
@@ -258,8 +258,6 @@ int MinARTn::push_back_sad()
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
 
-   // ecurrent = energy_force(1); ++evalf;
-   // artn_reset_vec();
   }
 
 return 0;
@@ -1301,12 +1299,11 @@ int MinARTn::min_converge(int maxiter)
     if (fail) return fail;
 
     // function evaluation criterion
-
     if (neval >= update->max_eval) return MAXEVAL;
 
     // energy tolerance criterion
-
     if (fabs(ecurrent-eprevious) < update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY)) return ETOL;
+
     // force tolerance criterion
 
     dot[0] = dot[1] = 0.0;
@@ -1665,7 +1662,7 @@ void MinARTn::artn_final()
     }
   }
 
-  if (flog)  delete [] flog;
+  if (flog)   delete [] flog;
   if (fevent) delete [] fevent;
   if (fconfg) delete [] fconfg;
   if (groupname) delete [] groupname;
@@ -1673,7 +1670,7 @@ void MinARTn::artn_final()
   if (glist)  delete [] glist;
   if (delpos) delete [] delpos;
 
-  if (random) delete random;
+  if (random)  delete random;
   if (dumpmin) delete dumpmin;
   if (dumpsad) delete dumpsad;
 
