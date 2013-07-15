@@ -94,7 +94,7 @@ int MinARTn::iterate(int maxevent)
   stopstr = stopstrings(stop_condition);
 
   if (me == 0 && fp1){
-    fprintf(fp1, "  - Minimize stop condition   : %s\n",  stopstr);
+    fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
     fprintf(fp1, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
     fprintf(fp1, "  - Temperature               : %lg\n", temperature);
   }
@@ -167,7 +167,7 @@ int MinARTn::push_back_sad()
     x0tmp[i] = x0[i];
   }
 
-  // push over the saddle point along the eigenvector direction
+  // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
   int nlocal = atom->nlocal, n = 0;
@@ -199,24 +199,28 @@ int MinARTn::push_back_sad()
   // output minimization information
   if (me == 0){
     if (fp1) {
-      fprintf(fp1, "    - Minimize stop condition   : %s\n",  stopstr);
-      fprintf(fp1, "    - Current energy (eV)       : %lg\n", ecurrent);
+      fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(fp1, "    - Current   energy (eV)     : %lg\n", ecurrent);
       fprintf(fp1, "    - Reference energy (eV)     : %lg\n", eref);
     }
     if (screen) {
-      fprintf(screen, "    - Minimize stop condition   : %s\n",  stopstr);
-      fprintf(screen, "    - Current energy (eV)       : %lg\n", ecurrent);
+      fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(screen, "    - Current   energy (eV)     : %lg\n", ecurrent);
       fprintf(screen, "    - Reference energy (eV)     : %lg\n", eref);
     }
   }
-  if ( fabs(ecurrent - eref) > 0.1) {
+  if ( fabs(ecurrent - eref) > max_ener_tol) {
     if (me == 0){
-      if (fp1) fprintf(fp1, "  Stage %d failed, |ecurrent - eref| = %g > 0.1, reject the new saddle.\n", stage, fabs(ecurrent - eref));
-      if (screen) fprintf(fp1, "  Stage %d failed, |ecurrent - eref| = %g > 0.1, reject the new saddle.\n", stage, fabs(ecurrent - eref));
+      if (fp1) fprintf(fp1, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), max_ener_tol);
+      if (screen) fprintf(screen, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), max_ener_tol);
     }
+
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     return 0;
   }
+
+  // check current center-of-mass
+  group->xcm(groupall, masstot, com);
 
   double dr = 0., drall;
   double **x = atom->x;
@@ -228,6 +232,9 @@ int MinARTn::push_back_sad()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
+    dx -= com[0] - com0[0];
+    dy -= com[1] - com0[1];
+    dz -= com[2] - com0[2];
     n += 3;
     tmp = dx*dx + dy*dy + dz*dz;
     if (tmp >= tmpthre) dr += tmp;
@@ -299,13 +306,13 @@ void MinARTn::push_down()
   if (me == 0){
     if (fp1){
       fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(fp1, "      - Minimize stop condition   : %s\n",  stopstr);
-      fprintf(fp1, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+      fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(fp1, "      - Current  min  energy (eV) : %lg\n", ecurrent);
     }
     if (screen){
       fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(screen, "      - Minimize stop condition   : %s\n",  stopstr);
-      fprintf(screen, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
+      fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(screen, "      - Current  min  energy (eV) : %lg\n", ecurrent);
     }
   }
 
@@ -336,6 +343,9 @@ void MinARTn::check_new_min()
   double tmp_me[2], tmp_all[2]; tmp_all[0] = tmp_all[1] = 0.;
   int n = 0;
 
+  // check current center-of-mass
+  group->xcm(groupall, masstot, com);
+
   // calculate dr
   // check minimum image
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
@@ -345,6 +355,9 @@ void MinARTn::check_new_min()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
+    dx -= com[0] - com0[0];
+    dy -= com[1] - com0[1];
+    dz -= com[2] - com0[2];
     tmp = dx*dx + dy*dy + dz*dz;
     dr += tmp;
     if(tmp > disp_thr2) ++n_moved;
@@ -417,6 +430,7 @@ void MinARTn::set_defaults()
   flag_push_back   = 0;
   flag_relax_sad   = 0;
   max_disp_tol     = 0.1;
+  max_ener_tol     = 0.1;
   flag_press       = 0;
   atom_disp_thr    = 0.1;
   cluster_radius   = 5.0;
@@ -584,6 +598,10 @@ void MinARTn::read_control()
       max_disp_tol = atof(token2);
       if (max_disp_tol <= 0.) error->all(FLERR, "max_disp_tol must be greater than 0.");
 
+    } else if (!strcmp(token1, "max_ener_tol")){
+      max_ener_tol = atof(token2);
+      if (max_ener_tol <= 0.) error->all(FLERR, "max_ener_tol must be greater than 0.");
+
     } else if (!strcmp(token1, "flag_press")){
       flag_press = atoi(token2);
 
@@ -655,6 +673,10 @@ void MinARTn::read_control()
   ngroup = group->count(igroup);
   if (ngroup < 1) error->all(FLERR, "No atom is found in your desired group for activation!");
 
+  // group info for all
+  groupall = group->find("all");
+  masstot = group->mass(groupall);
+
   // open log file and output control parameter info
   if (me == 0 && strcmp(flog, "NULL") != 0){
     fp1 = fopen(flog, "w");
@@ -696,6 +718,7 @@ void MinARTn::read_control()
     fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
     fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
     fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
+    fprintf(fp1, "max_ener_tol      %20g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
     fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
     fprintf(fp1, "\n");
@@ -840,6 +863,9 @@ int MinARTn::find_saddle( )
 
   double force_thh_p2 = force_th_perp_h * force_th_perp_h;
   double force_thc_p2 = force_th_perp_sad * force_th_perp_sad;
+
+  // record center-of-mass
+  group->xcm(groupall, masstot, com0);
 
   egval = 0.;
   flag_egvec = 0;
@@ -1100,17 +1126,17 @@ int MinARTn::find_saddle( )
         // output minimization information
         if (me == 0 && fp1){
           fprintf(fp1, "    The new saddle is now converged as:\n");
-          fprintf(fp1, "      - Minimize stop condition   : %s\n",  stopstr);
-          fprintf(fp1, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
-          fprintf(fp1, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
+          fprintf(fp1, "      - Current energy  (eV)      : %lg\n", ecurrent);
+          fprintf(fp1, "      - Energy  barrier (eV)      : %lg\n", ecurrent-eref);
           fprintf(fp1, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
           fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
         }
         if (me == 0 && screen){
           fprintf(screen, "    The new saddle is now converged as:\n");
-          fprintf(screen, "      - Minimize stop condition   : %s\n",  stopstr);
-          fprintf(screen, "      - Current (ref) energy (eV) : %lg\n", ecurrent);
-          fprintf(screen, "      - Energy barrier (eV)       : %lg\n", ecurrent-eref);
+          fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
+          fprintf(screen, "      - Current energy  (eV)      : %lg\n", ecurrent);
+          fprintf(screen, "      - Energy  barrier (eV)      : %lg\n", ecurrent-eref);
           fprintf(screen, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
           fprintf(screen, "      - # of force evaluations    : %d\n", neval);
         }

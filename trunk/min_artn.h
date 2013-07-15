@@ -78,6 +78,7 @@ private:
   int flag_push_back;      // if 1, will push back saddle point to check if it connect with the minimum
   int flag_relax_sad;      // further relax to the newly found saddle
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
+  double max_ener_tol;     // energy tolerance 
   int flag_press;          // Pressure will be calculated.
   double atom_disp_thr;    // threshold to identify whether an atom is displaced or not
 
@@ -118,6 +119,10 @@ private:
   void artn_final();
   void write_header(const int);
 
+  // center of mass info
+  int groupall;
+  double com0[3], com[3];
+  double masstot;
 };
 
 }
