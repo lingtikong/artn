@@ -56,9 +56,6 @@ private:
   double *egvec;
   double *x0tmp;
   double *x00;
-  double *htmp;
-  double *x_sad;
-  double *h_old;
   double *vvec;
   double *fperp;
 
