@@ -47,7 +47,7 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
   random = NULL;
   pressure = NULL;
   dumpmin = dumpsad = NULL;
-  egvec = x0tmp = x00 = htmp = x_sad = h_old = vvec = fperp = NULL;
+  egvec = x0tmp = x00 = vvec = fperp = NULL;
 
   fp1 = fp2 = NULL;
   glist = NULL;
@@ -162,9 +162,9 @@ int MinARTn::push_back_sad()
 {
   ++stage;
   for (int i = 0; i < nvec; ++i) {
-    x_sad[i] = xvec[i];
-    htmp[i]  = h[i];
-    x0tmp[i] = x0[i];
+    x0tmp[i] = xvec[i];
+    // fperp store old eigenvector
+    fperp[i]  = h[i];
   }
 
   // check current center-of-mass
@@ -261,9 +261,8 @@ int MinARTn::push_back_sad()
       if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
     }
     for (int i = 0; i < nvec; ++i){
-      xvec[i] = x_sad[i];
-      h[i]    = htmp[i];
-      x0[i]   = x0tmp[i];
+      xvec[i] = x0tmp[i];
+      h[i]    = fperp[i];
     }
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
@@ -810,20 +809,14 @@ void MinARTn::artn_init()
 
   // peratom vector I use
   int vec_count = 2;
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
-  fix_minimize->add_vector(3);
+  fix_minimize->add_vector(3);			//3
+  fix_minimize->add_vector(3);			//4
+  fix_minimize->add_vector(3);			//5
+  fix_minimize->add_vector(3);			//6
   x0tmp = fix_minimize->request_vector(++vec_count);	//3
-  h_old = fix_minimize->request_vector(++vec_count);	//4
-  egvec = fix_minimize->request_vector(++vec_count);  //5
-  x00   = fix_minimize->request_vector(++vec_count);	//6
-  fperp = fix_minimize->request_vector(++vec_count);	//7
-  htmp  = fix_minimize->request_vector(++vec_count);	//8
-  x_sad = fix_minimize->request_vector(++vec_count);  //9
+  egvec = fix_minimize->request_vector(++vec_count);    //4
+  x00   = fix_minimize->request_vector(++vec_count);	//5
+  fperp = fix_minimize->request_vector(++vec_count);	//6
 
   // group list
   int *tag  = atom->tag;
@@ -863,13 +856,10 @@ return;
 void MinARTn::artn_reset_vec()
 {
   x0tmp = fix_minimize->request_vector(3);
-  h_old = fix_minimize->request_vector(4);
-  egvec = fix_minimize->request_vector(5);
+  egvec = fix_minimize->request_vector(4);
 
-  x00   = fix_minimize->request_vector(6);
-  fperp = fix_minimize->request_vector(7);
-  htmp  = fix_minimize->request_vector(8);
-  x_sad = fix_minimize->request_vector(9);
+  x00   = fix_minimize->request_vector(5);
+  fperp = fix_minimize->request_vector(6);
 
 return;
 }
@@ -1020,7 +1010,8 @@ int MinARTn::find_saddle( )
   int inc = 0;
   for (int it_s = 0; it_s < max_activat_iter; ++it_s){
 
-    for (int i = 0; i < nvec; ++i) h_old[i] = h[i];
+    // g store old h
+    for (int i = 0; i < nvec; ++i) g[i] = h[i];
 
     // caculate egvec use lanczos
     lanczos(flag_egvec, 1, num_lancz_vec_c);
@@ -1033,7 +1024,7 @@ int MinARTn::find_saddle( )
     if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
     else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
 
-    for(int i = 0; i <nvec; ++i) hdot += h[i] * h_old[i];
+    for(int i = 0; i <nvec; ++i) hdot += h[i] * g[i];
     MPI_Reduce(&hdot,&hdotall,1,MPI_DOUBLE,MPI_SUM,0,world);
 
     // do minimizing perpendicular use SD or FIRE
@@ -1595,10 +1586,6 @@ int MinARTn::min_perp_fire(int maxiter)
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
-    eprevious = ecurrent;
-    ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
-
     fdoth = 0.;
     for (int i = 0; i < nvec; ++i) fdoth += fvec[i] * h[i];
     MPI_Allreduce(&fdoth,&fdothall,1,MPI_DOUBLE,MPI_SUM,world);
@@ -1679,6 +1666,9 @@ int MinARTn::min_perp_fire(int maxiter)
         v[i][2] += dtfm * fperp[3*i+2];
       }
     }
+    eprevious = ecurrent;
+    ecurrent = energy_force(1); ++evalf;
+    artn_reset_vec();
   }
 
 return 0;
