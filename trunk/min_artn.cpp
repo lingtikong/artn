@@ -209,18 +209,28 @@ int MinARTn::push_back_sad()
       fprintf(screen, "    - Reference energy (ev)     : %lg\n", eref);
     }
   }
+  if ( fabs(ecurrent - eref) > 0.1) {
+    if (me == 0){
+      if (fp1) fprintf(fp1, "  Stage %d failed, |ecurrent - eref| = %g > 0.1, reject the new saddle.\n", stage, fabs(ecurrent - eref));
+      if (screen) fprintf(fp1, "  Stage %d failed, |ecurrent - eref| = %g > 0.1, reject the new saddle.\n", stage, fabs(ecurrent - eref));
+    }
+    for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+    return 0;
+  }
 
   double dr = 0., drall;
   double **x = atom->x;
-  int n = 0;
+  n = 0;
+  double tmpthre = atom_disp_thr * atom_disp_thr;
   for (int i = 0; i < nlocal; ++i) {
+    double tmp;
     dx = x[i][0] - x00[n];
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dr += dx*dx + dy*dy + dz*dz;
-
     n += 3;
+    tmp = dx*dx + dy*dy + dz*dz;
+    if (tmp >= tmpthre) dr += tmp;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
