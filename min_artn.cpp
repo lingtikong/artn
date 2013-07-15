@@ -133,7 +133,7 @@ int MinARTn::iterate(int maxevent)
     if (flag_push_back) if (! push_back_sad()) continue;
 
     ++ievent; ++stage;
-    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f", ievent, ecurrent - eref);
+    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f %9.5f", ievent, ecurrent - eref, egval);
 
     ++sad_id;
     if (dumpsad){
@@ -167,6 +167,13 @@ int MinARTn::push_back_sad()
     x0tmp[i] = x0[i];
   }
 
+  // check current center-of-mass
+  group->xcm(groupall, masstot, com);
+  double dxcm[3];
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
+
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
@@ -176,6 +183,9 @@ int MinARTn::push_back_sad()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
+    dx -= dxcm[0];
+    dy -= dxcm[1];
+    dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -221,6 +231,9 @@ int MinARTn::push_back_sad()
 
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
 
   double dr = 0., drall;
   double **x = atom->x;
@@ -232,9 +245,9 @@ int MinARTn::push_back_sad()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= com[0] - com0[0];
-    dy -= com[1] - com0[1];
-    dz -= com[2] - com0[2];
+    dx -= dxcm[0];
+    dy -= dxcm[1];
+    dz -= dxcm[2];
     n += 3;
     tmp = dx*dx + dy*dy + dz*dz;
     if (tmp >= tmpthre) dr += tmp;
@@ -264,7 +277,6 @@ int MinARTn::push_back_sad()
     }
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-
   }
 
 return 0;
@@ -275,6 +287,13 @@ return 0;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::push_down()
 {
+  // check current center-of-mass
+  group->xcm(groupall, masstot, com);
+  double dxcm[3];
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
+
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
@@ -285,6 +304,9 @@ void MinARTn::push_down()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
+    dx -= dxcm[0];
+    dy -= dxcm[1];
+    dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -345,6 +367,10 @@ void MinARTn::check_new_min()
 
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
+  double dxcm[3];
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
 
   // calculate dr
   // check minimum image
@@ -355,9 +381,9 @@ void MinARTn::check_new_min()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= com[0] - com0[0];
-    dy -= com[1] - com0[1];
-    dz -= com[2] - com0[2];
+    dx -= dxcm[0];
+    dy -= dxcm[1];
+    dz -= dxcm[2];
     tmp = dx*dx + dy*dy + dz*dz;
     dr += tmp;
     if(tmp > disp_thr2) ++n_moved;
@@ -1142,7 +1168,7 @@ int MinARTn::find_saddle( )
         }
       }
 
-      return stop_condition;
+      return 1;
     }
   
     // caculate egvec use lanczos
@@ -1666,6 +1692,7 @@ void MinARTn::artn_final()
       fprintf(fp1, "# Total number of ARTn attempts : %d\n", nattempt);
       fprintf(fp1, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
       fprintf(fp1, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
+      fprintf(fp1, "# Overall mission success rate  : %4.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(fp1, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(fp1, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
@@ -1681,6 +1708,7 @@ void MinARTn::artn_final()
       fprintf(screen, "# Total number of ARTn attempts : %d\n", nattempt);
       fprintf(screen, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
+      fprintf(screen, "# Overall mission success rate  : %4.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
       fprintf(screen, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
@@ -1709,12 +1737,12 @@ return;
 void MinARTn::write_header(const int flag)
 {
   if (flag == 1){
-      fprintf(fp2, "#  1       2       3     4     5      6        7           8         9       10         11         12        13        14          15        16        17     18\n");
-      fprintf(fp2, "#Event   del-E    ref   sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz       pxy       pxz         pyz      Efinal    status  dr\n");
+      fprintf(fp2, "#  1       2         3      4     5     6      7        8           9         10      11         12         13        14        15          16        17        18     19\n");
+      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz       pxy       pxz         pyz      Efinal    status  dr\n");
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2       3     4     5      6        7           8         9       10       11    12\n");
-      fprintf(fp2, "#Event   del-E    ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
+      fprintf(fp2, "#  1       2       3        4     5     6      7        8           9         10     11         12   13\n");
+      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
 
   } else if (flag == 3){
     if (fp1){
