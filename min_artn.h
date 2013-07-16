@@ -110,7 +110,7 @@ private:
   // for output
   FILE *fp1, *fp2;
   char *flog, *fevent, *fconfg;
-  int log_level;           // 1, all; 0, main
+  int log_level, idum;     // 1, all; 0, main
   int print_freq;          // default 1
 
   void artn_final();
