@@ -37,7 +37,7 @@ private:
 
   void artn_reset_vec();
   void reset_coords();
-  void lanczos(bool, int, int);
+  int lanczos(bool, int, int);
   int min_perp_fire(int);
 
   int sad_found;
@@ -106,6 +106,7 @@ private:
   double eigen_th_fail;    // the eigen cutoff for failing in searching saddle point
   int    max_perp_moves_c; // Maximum number of perpendicular steps approaching saddle point
   double force_th_perp_sad;// Perpendicular force threhold approaching saddle point
+  int    conv_perp_inc;
 
   // for output
   FILE *fp1, *fp2;
