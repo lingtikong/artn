@@ -133,7 +133,7 @@ int MinARTn::iterate(int maxevent)
     if (flag_push_back) if (! push_back_sad()) continue;
 
     ++ievent; ++stage;
-    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f %9.5f", ievent, ecurrent - eref, egval);
+    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f %7.3f", ievent, ecurrent - eref, egval);
 
     ++sad_id;
     if (dumpsad){
@@ -968,6 +968,7 @@ int MinARTn::find_saddle( )
     }
     
     if (it > min_num_ksteps && egval < eigen_th_well){
+      idum = it;
       if (me == 0){
         if (fp1 && log_level && it%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
         ecurrent-eref, m_perp, trial, ftot, fpar2all, fperp2, egval, delr, evalf);
@@ -996,8 +997,6 @@ int MinARTn::find_saddle( )
       write_header(5);
     }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-    //ecurrent = energy_force(1); ++evalf;
-    //artn_reset_vec();
 
     return 0;
   }
@@ -1736,12 +1735,12 @@ return;
 void MinARTn::write_header(const int flag)
 {
   if (flag == 1){
-      fprintf(fp2, "#  1       2         3      4     5     6      7        8           9          10      11         12         13         14        15           16        17        18     19\n");
-      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin       nMove    pxx        pyy        pzz        pxy       pxz          pyz      Efinal    status  dr\n");
+      fprintf(fp2, "#  1       2        3       4     5     6      7        8           9          10      11         12         13         14        15           16        17        18     19\n");
+      fprintf(fp2, "#Event   del-E    EigVal   ref   sad   min   center    Eref        Emin       nMove    pxx        pyy        pzz        pxy       pxz          pyz      Efinal    status  dr\n");
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2       3        4     5     6      7        8           9         10     11         12   13\n");
-      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
+      fprintf(fp2, "#  1       2        3       4     5     6      7        8           9         10     11         12   13\n");
+      fprintf(fp2, "#Event   del-E    EigVal   ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
 
   } else if (flag == 3){
     if (fp1){
@@ -1763,11 +1762,11 @@ void MinARTn::write_header(const int flag)
   } else if (flag == 4){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(fp1, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+      fprintf(fp1, "  Stage %d succeeded after %d iterations, continue searching based on eigen-vector.\n", stage, idum);
     }
     if (screen){
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(screen, "  Stage %d succeeded, continue searching based on eigen-vector.\n", stage);
+      fprintf(screen, "  Stage %d succeeded after %d iterations, continue searching based on eigen-vector.\n", stage, idum);
     }
 
   } else if (flag == 5){
