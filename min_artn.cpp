@@ -1029,9 +1029,7 @@ int MinARTn::find_saddle( )
 
     // do minimizing perpendicular use SD or FIRE
     if (use_fire) {
-      m_perp = trial = 0;
-      min_perp_fire(MIN(60, it_s + 40));
-
+      m_perp = trial = min_perp_fire(MIN(60, it_s + 40));
     } else {
       m_perp = trial = nfail = 0;
       step = increment_size * 0.4;
@@ -1561,6 +1559,7 @@ return;
 
 /* ---------------------------------------------------------------------------
  *  FIRE: fast interial relaxation engine, here d_min is not considered.
+ *  return iteration number
  * -------------------------------------------------------------------------*/
 int MinARTn::min_perp_fire(int maxiter)
 {
@@ -1620,7 +1619,7 @@ int MinARTn::min_perp_fire(int maxiter)
       MPI_Allreduce(tmp_me, tmp_all,2,MPI_DOUBLE,MPI_SUM,world);
       vdotvall = tmp_all[0]; fdotfall = tmp_all[1];
       
-      if (fdotfall < force_thr2) return 1;
+      if (fdotfall < force_thr2) return iter;
 
       if (fdotfall == 0.) scale2 = 0.;
       else scale2 = alpha * sqrt(vdotvall/fdotfall);
@@ -1671,7 +1670,7 @@ int MinARTn::min_perp_fire(int maxiter)
     artn_reset_vec();
   }
 
-return 0;
+return maxiter;
 }
 
 /* ---------------------------------------------------------------------------
