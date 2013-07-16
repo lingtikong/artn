@@ -338,7 +338,6 @@ void MinARTn::push_down()
       fprintf(screen, "      - Current  min  energy (eV) : %lg\n", ecurrent);
     }
   }
-
   // store min configuration
   ++min_id;
   if (dumpmin){
