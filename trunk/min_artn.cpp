@@ -156,7 +156,7 @@ return MAXITER;
 }
 
 /* -------------------------------------------------------------------------------------------------
- * return 1, saddle connect with minimum, else return 0
+ * return 1, saddle connect with starting minimum, else return 0
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::push_back_sad()
 {
@@ -190,8 +190,8 @@ int MinARTn::push_back_sad()
 
     n += 3;
   }
-  MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
 
+  MPI_Allreduce(&hdotxx0,&hdotxx0all,1,MPI_DOUBLE,MPI_SUM,world);
   if (hdotxx0all < 0.){
     for (int i = 0; i < nvec; ++i) xvec[i] += h[i] * push_over_saddle;
   } else {
@@ -238,7 +238,7 @@ int MinARTn::push_back_sad()
   double dr = 0., drall;
   double **x = atom->x;
   n = 0;
-  double tmpthre = atom_disp_thr * atom_disp_thr;
+  //double tmpthre = atom_disp_thr * atom_disp_thr;
   for (int i = 0; i < nlocal; ++i) {
     double tmp;
     dx = x[i][0] - x00[n];
@@ -250,7 +250,8 @@ int MinARTn::push_back_sad()
     dz -= dxcm[2];
     n += 3;
     tmp = dx*dx + dy*dy + dz*dz;
-    if (tmp >= tmpthre) dr += tmp;
+    //if (tmp >= tmpthre) dr += tmp;
+    dr += tmp;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
@@ -260,6 +261,7 @@ int MinARTn::push_back_sad()
       if (fp1) fprintf(fp1, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
       if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
     }
+
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       h[i]    = fperp[i];
@@ -814,7 +816,7 @@ void MinARTn::artn_init()
   fix_minimize->add_vector(3);			//5
   fix_minimize->add_vector(3);			//6
   x0tmp = fix_minimize->request_vector(++vec_count);	//3
-  egvec = fix_minimize->request_vector(++vec_count);    //4
+  egvec = fix_minimize->request_vector(++vec_count);  //4
   x00   = fix_minimize->request_vector(++vec_count);	//5
   fperp = fix_minimize->request_vector(++vec_count);	//6
 
@@ -994,8 +996,8 @@ int MinARTn::find_saddle( )
       write_header(5);
     }
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-    ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
+    //ecurrent = energy_force(1); ++evalf;
+    //artn_reset_vec();
 
     return 0;
   }
@@ -1019,8 +1021,8 @@ int MinARTn::find_saddle( )
     // set search direction according to egvec
     hdot = hdotall = tmpsum = tmpsumall = 0.;
     for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
-
     MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
+
     if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
     else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
 
@@ -1072,13 +1074,12 @@ int MinARTn::find_saddle( )
       }
     }
         
-    delr = ftot = 0.;
+    tmp_me[0] = tmp_me[1] = 0.;
     for (int i = 0; i < nvec; ++i) {
-      ftot += fvec[i] * fvec[i];
-      tmp = xvec[i] - x0[i];
-      delr += tmp*tmp;
+      tmp_me[0] += fvec[i] * fvec[i];
+      delr = xvec[i] - x0[i];
+      tmp_me[1] += tmp*tmp;
     }
-    tmp_me[0] = ftot; tmp_me[1] = delr;
     MPI_Allreduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, world);
     ftotall = sqrt(tmp_all[0]); delr = tmp_all[1];
    
@@ -1126,7 +1127,8 @@ int MinARTn::find_saddle( )
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
         it_s, ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
 
-         write_header(8);
+        idum = it_s;
+        write_header(8);
       }
 
       if ( flag_relax_sad ){
@@ -1169,7 +1171,7 @@ int MinARTn::find_saddle( )
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
     ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec(); reset_coords();
+    artn_reset_vec();
   }
 
   if (me == 0){
@@ -1182,8 +1184,8 @@ int MinARTn::find_saddle( )
   }
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-  ecurrent = energy_force(1); ++evalf;
-  artn_reset_vec();
+  //ecurrent = energy_force(1); ++evalf;
+  //artn_reset_vec();
 
 return 0;
 }
@@ -1206,9 +1208,10 @@ void MinARTn::reset_coords()
     dz = dz0 = x[i][2] - x0tmp[n+2];
     domain->minimum_image(dx,dy,dz);
 
-    if (abs(dx - dx0) > ZERO) x0tmp[n]   = x[i][0] - dx;
-    if (abs(dy - dy0) > ZERO) x0tmp[n+1] = x[i][1] - dy;
-    if (abs(dz - dz0) > ZERO) x0tmp[n+2] = x[i][2] - dz;
+    if (dx != dx0) x0tmp[n]   = x[i][0] - dx;
+    if (dy != dy0) x0tmp[n+1] = x[i][1] - dy;
+    if (dz != dz0) x0tmp[n+2] = x[i][2] - dz;
+
     n += 3;
   }
 
@@ -1332,6 +1335,7 @@ int MinARTn::min_converge(int maxiter)
   for (i = 0; i < nvec; ++i) h[i] = g[i] = fvec[i];
 
   gg = fnorm_sqr();
+  double ftol_sq = update->ftol*update->ftol;
 
   niter = 0;
   for (int iter = 0; iter < maxiter; ++iter) {
@@ -1349,14 +1353,14 @@ int MinARTn::min_converge(int maxiter)
 
     // force tolerance criterion
 
-    dot[0] = dot[1] = 0.0;
+    dot[0] = dot[1] = 0.;
     for (i = 0; i < nvec; ++i) {
       dot[0] += fvec[i]*fvec[i];
       dot[1] += fvec[i]*g[i];
     }
     MPI_Allreduce(dot,dotall,2,MPI_DOUBLE,MPI_SUM,world);
 
-    if (dotall[0] < update->ftol*update->ftol) return FTOL;
+    if (dotall[0] < ftol_sq) return FTOL;
 
     // update new search direction h from new f
     // = -Grad(x) and old g
@@ -1585,6 +1589,7 @@ int MinARTn::min_perp_fire(int maxiter)
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
+
     fdoth = 0.;
     for (int i = 0; i < nvec; ++i) fdoth += fvec[i] * h[i];
     MPI_Allreduce(&fdoth,&fdothall,1,MPI_DOUBLE,MPI_SUM,world);
@@ -1644,15 +1649,16 @@ int MinARTn::min_perp_fire(int maxiter)
     double dtfm;
     double dtf = dt * force->ftm2v;
     int nlocal = atom->nlocal;
+    int n = 0;
     if (rmass) {
       for (int i = 0; i < nlocal; ++i) {
         dtfm = dtf / rmass[i];
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
         x[i][2] += dt * v[i][2];
-        v[i][0] += dtfm * fperp[3*i];
-        v[i][1] += dtfm * fperp[3*i+1];
-        v[i][2] += dtfm * fperp[3*i+2];
+        v[i][0] += dtfm * fperp[n++];
+        v[i][1] += dtfm * fperp[n++];
+        v[i][2] += dtfm * fperp[n++];
       }
     } else {
       for (int i = 0; i < nlocal; ++i) {
@@ -1660,9 +1666,9 @@ int MinARTn::min_perp_fire(int maxiter)
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
         x[i][2] += dt * v[i][2];
-        v[i][0] += dtfm * fperp[3*i];
-        v[i][1] += dtfm * fperp[3*i+1];
-        v[i][2] += dtfm * fperp[3*i+2];
+        v[i][0] += dtfm * fperp[n++];
+        v[i][1] += dtfm * fperp[n++];
+        v[i][2] += dtfm * fperp[n++];
       }
     }
     eprevious = ecurrent;
@@ -1730,8 +1736,8 @@ return;
 void MinARTn::write_header(const int flag)
 {
   if (flag == 1){
-      fprintf(fp2, "#  1       2         3      4     5     6      7        8           9         10      11         12         13        14        15          16        17        18     19\n");
-      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz       pxy       pxz         pyz      Efinal    status  dr\n");
+      fprintf(fp2, "#  1       2         3      4     5     6      7        8           9          10      11         12         13         14        15           16        17        18     19\n");
+      fprintf(fp2, "#Event   del-E     EigVal  ref   sad   min   center    Eref        Emin       nMove    pxx        pyy        pzz        pxy       pxz          pyz      Efinal    status  dr\n");
 
   } else if (flag == 2){
       fprintf(fp2, "#  1       2       3        4     5     6      7        8           9         10     11         12   13\n");
@@ -1803,11 +1809,11 @@ void MinARTn::write_header(const int flag)
   } else if (flag == 8){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(fp1, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
+      fprintf(fp1, "  Stage %d converged at a new saddle after %d iterations, dE = %g\n", stage, idum, ecurrent-eref);
     }
     if (screen){
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(screen, "  Stage %d succeeded in converging at a new saddle, dE = %g\n", stage, ecurrent-eref);
+      fprintf(screen, "  Stage %d converged at a new saddle after %d iterations, dE = %g\n", stage, idum, ecurrent-eref);
     }
 
   } else if (flag == 9){
