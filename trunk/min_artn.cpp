@@ -1106,18 +1106,18 @@ int MinARTn::find_saddle( )
     if (me == 0){
       delr = sqrt(delr);
       fperp2 = sqrt(fperp2all);
-      if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
-      if (screen && it_s%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
+      if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+      if (screen && it_s%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
     }
    
     if (egval > eigen_th_fail){
       if (me == 0){
-        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
-        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
+        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         write_header(7);
       }
@@ -1129,10 +1129,10 @@ int MinARTn::find_saddle( )
   
     if (ftotall < force_th_saddle){
       if (me == 0){
-        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
-        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
+        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
         idum = it_s;
         write_header(8);
@@ -1173,8 +1173,8 @@ int MinARTn::find_saddle( )
   
     // caculate egvec use lanczos
     lanczos(flag_egvec, 1, num_lancz_vec_c);
-    // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
 #define MinEGV 0.1 // was 0.5
+    // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
     ecurrent = energy_force(1); ++evalf;
@@ -1182,17 +1182,15 @@ int MinARTn::find_saddle( )
   }
 
   if (me == 0){
-    if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
-    if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT " %10.5f\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, evalf, hdotall);
+    if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %6.3f " BIGINT_FORMAT "\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %6.3f " BIGINT_FORMAT "\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
     write_header(9);
   }
 
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
-  //ecurrent = energy_force(1); ++evalf;
-  //artn_reset_vec();
 
 return 0;
 }
@@ -1316,8 +1314,8 @@ void MinARTn::random_kick()
   int nkick;
   MPI_Reduce(&nhit,&nkick,1,MPI_INT,MPI_SUM,0,world);
   if (me == 0){
-    if (fp1) fprintf(fp1, " with total %d atoms.\n", nkick);
-    if (screen) fprintf(screen, " with total %d atoms.\n", nkick);
+    if (fp1) fprintf(fp1, " with total %d atoms. %d success till now.\n", nkick, sad_id);
+    if (screen) fprintf(screen, " with total %d atoms. %d success till now.\n", nkick, sad_id);
   }
 
 return;
@@ -1695,7 +1693,7 @@ void MinARTn::artn_final()
       fprintf(fp1, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
       fprintf(fp1, "# Overall mission success rate  : %4.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(fp1, "# Number of new minimumi found  : %d\n", min_id-ref_0);
-      fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(fp1, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0))*100.);
       fprintf(fp1, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
       fprintf(fp1, "#=========================================================================================\n");
       fclose(fp1); fp1 = NULL;
@@ -1711,7 +1709,7 @@ void MinARTn::artn_final()
       fprintf(screen, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
       fprintf(screen, "# Overall mission success rate  : %4.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
-      fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0)));
+      fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0))*100.);
       fprintf(screen, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
       fprintf(screen, "#=========================================================================================\n");
     }
@@ -1787,14 +1785,14 @@ void MinARTn::write_header(const int flag)
       fprintf(fp1, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
       if (log_level){
         fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
-        fprintf(fp1, "    Iter   E-Eref m_perp trial nlanc ftot      fpar        fperp      eigen      delr   evalf     a1\n");
+        fprintf(fp1, "    Iter   E-Eref m_perp trial nlanc ftot      fpar        fperp     eigen     delr    h.h' evalf\n");
         fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       }
     }
     if (screen){
       fprintf(screen, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
-      fprintf(screen, "    Iter   E-Eref m_perp trial nlanc ftot      fpar        fperp      eigen      delr   evalf     a1\n");
+      fprintf(screen, "    Iter   E-Eref m_perp trial nlanc ftot      fpar        fperp     eigen     delr    h.h' evalf\n");
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
     }
 
