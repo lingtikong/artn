@@ -881,7 +881,7 @@ int MinARTn::find_saddle( )
   double step, preenergy;
   double tmp;
   int m_perp = 0, trial = 0, nfail = 0;
-  double tmp_me[2], tmp_all[2];
+  double tmp_me[3], tmp_all[3];
 
   double force_thh_p2 = force_th_perp_h * force_th_perp_h;
   double force_thc_p2 = force_th_perp_sad * force_th_perp_sad;
@@ -940,7 +940,7 @@ int MinARTn::find_saddle( )
         for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
         step *= 0.6; ++nfail;
         ecurrent = energy_force(1); ++evalf;
-        artn_reset_vec(); reset_coords();
+        artn_reset_vec(); //reset_coords();
       }
       ++trial;
     }
@@ -1077,20 +1077,24 @@ int MinARTn::find_saddle( )
       }
     }
         
-    tmp_me[0] = tmp_me[1] = 0.;
+    tmp_me[0] = tmp_me[1] = tmp_me[2] = 0.;
     for (int i = 0; i < nvec; ++i) {
       tmp_me[0] += fvec[i] * fvec[i];
       delr = xvec[i] - x0[i];
       tmp_me[1] += delr * delr;
+      tmp_me[2] += fvec[i] * h[i];
     }
-    MPI_Allreduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, world);
-    ftotall = sqrt(tmp_all[0]); delr = tmp_all[1];
+    MPI_Allreduce(tmp_me, tmp_all, 3, MPI_DOUBLE, MPI_SUM, world);
+    ftotall = sqrt(tmp_all[0]); delr = tmp_all[1]; fpar2all = tmp_all[2];
+    if (fpar2all > -1.) inc = conv_perp_inc;
    
     // output information
+/*
     fpar2 = 0.;
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     if (fpar2all > -1.) inc = conv_perp_inc;
+*/
 
     fperp2 = 0.;
     for (int i = 0; i < nvec; ++i){
