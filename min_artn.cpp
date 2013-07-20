@@ -499,7 +499,7 @@ void MinARTn::read_control()
   FILE *fp = fopen("artn.control", "r");
   char *fmin, *fsad; fmin = fsad = NULL;
   if (fp == NULL){
-    sprintf(str, "cannot open ARTn control parameter file.");
+    if(screen)fsprintf(screen, "Cannot open ARTn control parameter file. Use default parameters for ARTn.\n");
   } else {
     while (1) {
       fgets(oneline, MAXLINE, fp);
