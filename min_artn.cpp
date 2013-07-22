@@ -986,7 +986,7 @@ int MinARTn::find_saddle( )
     }
     
     // push along the search direction
-    step = basin_factor * increment_size * MAX(-0.1, MIN(2., -fpar2all));
+    step = basin_factor * increment_size; // * MAX(-0.1, MIN(2., -fpar2all));
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
