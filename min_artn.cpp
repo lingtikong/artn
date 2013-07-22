@@ -499,7 +499,7 @@ void MinARTn::read_control()
   FILE *fp = fopen("artn.control", "r");
   char *fmin, *fsad; fmin = fsad = NULL;
   if (fp == NULL){
-    if(screen)fsprintf(screen, "Cannot open ARTn control parameter file. Use default parameters for ARTn.\n");
+    if(screen) fprintf(screen, "Cannot open ARTn control parameter file. Use default parameters for ARTn.\n");
   } else {
     while (1) {
       fgets(oneline, MAXLINE, fp);
@@ -810,7 +810,6 @@ void MinARTn::artn_init()
   evalf = 0;
   flag_egvec = 0;
   if (nvec) vvec = atom->v[0];
-  memory->create(delpos, MAX(1,nvec), "delpos");
 
   // peratom vector I use
   int vec_count = 2;
@@ -1242,7 +1241,7 @@ void MinARTn::random_kick()
 
   double cord[3];
 
-  memory->grow(delpos, MAX(1,nvec), "delpos");
+  delpos = fix_minimize->request_vector(4);
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   int nlocal = atom->nlocal;
   int *tag   = atom->tag;
@@ -1721,7 +1720,6 @@ void MinARTn::artn_final()
   if (groupname) delete [] groupname;
 
   if (glist)  delete [] glist;
-  if (delpos) delete [] delpos;
 
   if (random)  delete random;
   if (dumpmin) delete dumpmin;
