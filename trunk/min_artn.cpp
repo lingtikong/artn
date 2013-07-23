@@ -25,7 +25,6 @@
 #define MAXLINE 512
 #define ZERO  1.e-10
 
-#define TEST
 
 using namespace LAMMPS_NS;
 
@@ -458,7 +457,7 @@ void MinARTn::set_defaults()
   max_num_events   = 1000;
   max_activat_iter = 100;
   increment_size   = 0.09;
-  use_fire         = 0;
+  use_fire         = 1;
   flag_push_back   = 0;
   flag_relax_sad   = 0;
   max_disp_tol     = 0.1;
@@ -470,9 +469,9 @@ void MinARTn::set_defaults()
   // for harmonic well
   init_step_size   = 0.05;
   basin_factor     = 2.1;
-  max_perp_move_h  = 10;
+  max_perp_move_h  = 8;
   min_num_ksteps   = 0;		
-  eigen_th_well    = -0.001;
+  eigen_th_well    = -1.;
   max_iter_basin   = 20;
   force_th_perp_h  = 0.5;
 
@@ -1602,7 +1601,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       flag_egvec = 1;
       for (int i=0; i < nvec; ++i) egvec[i] = 0.;
       for (int i=0; i<nvec; ++i)
-	for (int j=0; j<n; ++j) egvec[i] += z[j] * lanc[j][i];
+	for (int j=0; j<n-1; ++j) egvec[i] += z[j] * lanc[j][i];
 
       // normalize egvec.
       double sum = 0., sumall;
