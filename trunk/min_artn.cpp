@@ -130,6 +130,7 @@ int MinARTn::iterate(int maxevent)
     while (! find_saddle() ){stage = 1; ++nattempt;}
 
     ++sad_found;
+    if (check_sad2min()) continue;
 
     if (flag_push_back) if (! push_back_sad()) continue;
     ++sad_id;
@@ -156,6 +157,56 @@ int MinARTn::iterate(int maxevent)
   artn_final();
 
 return MAXITER;
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * return 0 if distance between new saddle and original min is greater than initial kick.
+------------------------------------------------------------------------------------------------- */
+int MinARTn::check_sad2min()
+{
+  reset_x00();
+  // check current center-of-mass
+  group->xcm(groupall, masstot, com);
+  double dxcm[3];
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
+
+  // check the distance between new saddle and original min
+  double dist2 = 0., dist2all;
+  double dx, dy, dz;
+  int nlocal = atom->nlocal, n = 0;
+  for (int i = 0; i < nlocal; ++i){
+    dx = xvec[n]   - x00[n];
+    dy = xvec[n+1] - x00[n+1];
+    dz = xvec[n+2] - x00[n+2];
+    domain->minimum_image(dx,dy,dz);
+    dx -= dxcm[0];
+    dy -= dxcm[1];
+    dz -= dxcm[2];
+    dist2 += dx * dx + dy * dy + dz * dz;
+
+    n += 3;
+  }
+
+  MPI_Allreduce(&dist2, &dist2all,1,MPI_DOUBLE,MPI_SUM,world);
+  dist2all = sqrt(dist2all);
+
+  int status = 0;
+  if (dist2all >= init_step_size){
+    if (me == 0){
+      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, acceptable.\n", ref_id, dist2all);
+      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, acceptable.\n", ref_id, dist2all);
+    }
+  } else {
+    if (me == 0){
+      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g of initial activation, reject the new saddle.\n", ref_id, dist2all, init_step_size);
+      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g of initial activation, reject the new saddle.\n", ref_id, dist2all, init_step_size);
+    }
+    status = 1;
+  }
+
+return status;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -1760,12 +1811,14 @@ return;
 void MinARTn::write_header(const int flag)
 {
   if (flag == 1){
-      fprintf(fp2, "#  1       2        3       4     5     6      7        8           9         10      11         12         13         14        15           16       17       18    19\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref   sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz        pxy       pxz          pyz     Efinal   status dr\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10      11         12         13         14        15           16       17       18    19\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz        pxy       pxz          pyz     Efinal   status dr\n");
+      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2        3       4     5     6      7        8           9         10     11         12   13\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref   sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10     11         12   13\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
+      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 3){
     if (fp1){
