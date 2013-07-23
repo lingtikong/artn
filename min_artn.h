@@ -28,6 +28,7 @@ private:
   void random_kick();
 
   int find_saddle();
+  int check_sad2min();
   int min_converge(int);
   void sad_converge(int);
 
