@@ -29,7 +29,7 @@ private:
 
   int find_saddle();
   int min_converge(int);
-  int sad_converge(int);
+  void sad_converge(int);
 
   int push_back_sad();
   void push_down();
