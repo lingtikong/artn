@@ -174,6 +174,7 @@ int MinARTn::push_back_sad()
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
 
+  reset_x00();
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
@@ -204,7 +205,7 @@ int MinARTn::push_back_sad()
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   stopstr = stopstrings(stop_condition);
-  artn_reset_vec();
+  artn_reset_vec(); reset_x00();
 
   // output minimization information
   if (me == 0){
@@ -300,6 +301,7 @@ void MinARTn::push_down()
   double dx, dy, dz;
   int nlocal = atom->nlocal;
   int n = 0;
+  reset_x00();
   for (int i = 0; i < nlocal; ++i){
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
@@ -374,6 +376,7 @@ void MinARTn::check_new_min()
 
   // calculate dr
   // check minimum image
+  reset_x00();
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
   int n_moved = 0, n_movedall;
   for (int i = 0; i < nlocal; ++i) {
@@ -425,6 +428,7 @@ void MinARTn::check_new_min()
   } else {
     if (me == 0) write_header(14);
 
+    reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
@@ -812,16 +816,15 @@ void MinARTn::artn_init()
   if (nvec) vvec = atom->v[0];
 
   // peratom vector I use
-  int vec_count = 2;
   fix_minimize->store_box();
   fix_minimize->add_vector(3);			//3
   fix_minimize->add_vector(3);			//4
   fix_minimize->add_vector(3);			//5
   fix_minimize->add_vector(3);			//6
-  x0tmp = fix_minimize->request_vector(++vec_count);	//3
-  egvec = fix_minimize->request_vector(++vec_count);  //4
-  x00   = fix_minimize->request_vector(++vec_count);	//5
-  fperp = fix_minimize->request_vector(++vec_count);	//6
+  x0tmp = fix_minimize->request_vector(3);  //3
+  egvec = fix_minimize->request_vector(4);  //4
+  x00   = fix_minimize->request_vector(5);  //5
+  fperp = fix_minimize->request_vector(6);  //6
 
   // group list
   int *tag  = atom->tag;
@@ -1000,6 +1003,7 @@ int MinARTn::find_saddle( )
 
       write_header(5);
     }
+    reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
 
     return 0;
@@ -1122,6 +1126,7 @@ int MinARTn::find_saddle( )
         write_header(7);
       }
 
+      reset_x00();
       for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   
       return 0;
@@ -1190,6 +1195,7 @@ int MinARTn::find_saddle( )
     write_header(9);
   }
 
+  reset_x00();
   for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
 
 return 0;
@@ -1225,6 +1231,35 @@ void MinARTn::reset_coords()
 return;
 }
 
+/* -----------------------------------------------------------------------------
+ * reset coordinates x00
+ * ---------------------------------------------------------------------------*/
+void MinARTn::reset_x00()
+{
+  domain->set_global_box();
+
+  double **x = atom->x;
+  int nlocal = atom->nlocal;
+  double dx,dy,dz,dx0,dy0,dz0;
+
+  int n = 0;
+  for (int i = 0; i < nlocal; ++i) {
+    dx = dx0 = x[i][0] - x00[n];
+    dy = dy0 = x[i][1] - x00[n+1];
+    dz = dz0 = x[i][2] - x00[n+2];
+    domain->minimum_image(dx,dy,dz);
+
+    if (dx != dx0) x00[n]   = x[i][0] - dx;
+    if (dy != dy0) x00[n+1] = x[i][1] - dy;
+    if (dz != dz0) x00[n+2] = x[i][2] - dz;
+
+    n += 3;
+  }
+
+  domain->set_global_box();
+
+return;
+}
 /* ------------------------------------------------------------------------------
  * random kick atoms in the defined group and radius
  * ----------------------------------------------------------------------------*/
