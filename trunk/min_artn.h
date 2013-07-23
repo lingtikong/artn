@@ -37,6 +37,7 @@ private:
 
   void artn_reset_vec();
   void reset_coords();
+  void reset_x00();
   int lanczos(bool, int, int);
   int min_perp_fire(int);
 
