@@ -25,6 +25,8 @@
 #define MAXLINE 512
 #define ZERO  1.e-10
 
+#define TEST
+
 using namespace LAMMPS_NS;
 
 /* -------------------------------------------------------------------------------------------------
@@ -1021,6 +1023,11 @@ int MinARTn::find_saddle( )
 
     // g store old h
     for (int i = 0; i < nvec; ++i) g[i] = h[i];
+#ifdef TEST
+    double hm = 0.;
+    for(int i = 0; i < nvec; ++i) hm += h[i] * h[i];
+    fprintf(screen, "hold = %f\n",hm);
+#endif
 
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
@@ -1032,6 +1039,12 @@ int MinARTn::find_saddle( )
 
     if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
     else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
+
+#ifdef TEST
+    hm = 0.;
+    for(int i = 0; i < nvec; ++i) hm += h[i] * h[i];
+    fprintf(screen, "hnew = %f\n",hm);
+#endif
 
     for(int i = 0; i <nvec; ++i) hdot += h[i] * g[i];
     MPI_Reduce(&hdot,&hdotall,1,MPI_DOUBLE,MPI_SUM,0,world);
@@ -1585,6 +1598,20 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
   if (con_flag == 0){
     //outlog("WARNING, LNACZOS method not converged!\n");
     egval = eigen2;
+    if (flag > 0){
+      flag_egvec = 1;
+      for (int i=0; i < nvec; ++i) egvec[i] = 0.;
+      for (int i=0; i<nvec; ++i)
+	for (int j=0; j<n; ++j) egvec[i] += z[j] * lanc[j][i];
+
+      // normalize egvec.
+      double sum = 0., sumall;
+      for (int i = 0; i < nvec; ++i) sum += egvec[i] * egvec[i];
+
+      MPI_Allreduce(&sum, &sumall,1,MPI_DOUBLE,MPI_SUM,world);
+      sumall = 1. / sqrt(sumall);
+      for (int i=0; i < nvec; ++i) egvec[i] *= sumall;
+    }
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       fvec[i] = f0[i];
@@ -1601,7 +1628,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
 
   modify->delete_fix("artn_lanczos");
 
-return int(n);
+return MIN(int(n),maxvec);
 }
 
 /* ---------------------------------------------------------------------------
