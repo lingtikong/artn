@@ -813,6 +813,7 @@ void MinARTn::artn_init()
 
   // peratom vector I use
   int vec_count = 2;
+  fix_minimize->store_box();
   fix_minimize->add_vector(3);			//3
   fix_minimize->add_vector(3);			//4
   fix_minimize->add_vector(3);			//5
