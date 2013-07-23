@@ -259,7 +259,7 @@ int MinARTn::push_back_sad()
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
-  reset_x00(); reset_coords();
+  reset_x00();
 
   // output minimization information
   if (me == 0){
@@ -316,6 +316,7 @@ int MinARTn::push_back_sad()
       if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
     }
 
+    reset_coords();
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       h[i]    = fperp[i];
@@ -985,7 +986,7 @@ int MinARTn::find_saddle( )
         xvec[i] += step * fperp[i];
       }
       ecurrent = energy_force(1); ++evalf;
-      artn_reset_vec(); reset_coords();
+      artn_reset_vec();
       
       if (ecurrent < preenergy){
         step *= 1.2;
@@ -993,6 +994,7 @@ int MinARTn::find_saddle( )
         preenergy = ecurrent;
 
       } else {
+        reset_coords();
         for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
         step *= 0.6; ++nfail;
         ecurrent = energy_force(1); ++evalf;
@@ -1127,7 +1129,7 @@ int MinARTn::find_saddle( )
           xvec[i] += step * fperp[i];
         }
         ecurrent = energy_force(1); ++evalf;
-        artn_reset_vec(); reset_coords();
+        artn_reset_vec();
         
         if (ecurrent < preenergy){
           step *= 1.2;
@@ -1135,7 +1137,7 @@ int MinARTn::find_saddle( )
           preenergy = ecurrent;
         
         } else {
-        
+          reset_coords();
           for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
           step *= 0.6; ++nfail;
           ecurrent = energy_force(1); ++evalf;
@@ -1533,11 +1535,12 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       lanc[n-1][i] = q_k[i];
     }
 
+    reset_coords();
     // random move to caculate u(k) with the finite difference approximation
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i] + q_k[i] * DEL_LANCZOS;
 
     energy_force(1); ++evalf;
-    reset_coords();
+
     r_k_1 = fix_lanczos->request_vector(0);
     q_k_1 = fix_lanczos->request_vector(1);
     q_k = fix_lanczos->request_vector(2);
@@ -1581,6 +1584,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     }
     if (n >= 3 && fabs((eigen2-eigen1)/eigen1) < eigen_th_lancz) {
       con_flag = 1;
+      reset_coords();
       for (int i = 0; i < nvec; ++i){
 	     xvec[i] = x0tmp[i];
 	     fvec[i] = f0[i];
@@ -1626,6 +1630,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       sumall = 1. / sqrt(sumall);
       for (int i=0; i < nvec; ++i) egvec[i] *= sumall;
     }
+    reset_coords();
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       fvec[i] = f0[i];
