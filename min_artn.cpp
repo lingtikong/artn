@@ -51,7 +51,6 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 
   fp1 = fp2 = NULL;
   glist = NULL;
-  delpos = NULL;
   groupname = flog = fevent = fconfg = NULL;
 
   char *id_press = new char [13];
@@ -82,13 +81,13 @@ int MinARTn::iterate(int maxevent)
   max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
-  if (me == 0) write_header(-1);
+  if (me == 0) print_info(-1);
 
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
-  if (me == 0) write_header(0);
+  if (me == 0) print_info(0);
   if (flag_press){
     pressure->compute_vector();
     double * press = pressure->vector;
@@ -109,8 +108,8 @@ int MinARTn::iterate(int maxevent)
 
   // print header of event log file
   if (me == 0 && fp2){
-    if (flag_press) write_header(1);
-    else write_header(2);
+    if (flag_press) print_info(1);
+    else print_info(2);
   }
 
   int ievent = 0;
@@ -243,7 +242,7 @@ int MinARTn::push_back_sad()
   }
 
   //ecurrent = energy_force(1); ++evalf;
-  if (me == 0) write_header(11);
+  if (me == 0) print_info(11);
 
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
@@ -363,7 +362,7 @@ void MinARTn::push_down()
   else for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
 
   ecurrent = energy_force(1); ++evalf;
-  if (me == 0) write_header(12);
+  if (me == 0) print_info(12);
 
   // do minimization with CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
@@ -464,11 +463,11 @@ void MinARTn::metropolis()
   MPI_Bcast(&acc, 1, MPI_INT, 0, world);
 
   if (acc){
-    if (me == 0) write_header(13);
+    if (me == 0) print_info(13);
     ref_id = min_id; eref = ecurrent;
 
   } else {
-    if (me == 0) write_header(14);
+    if (me == 0) print_info(14);
 
     reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
@@ -943,7 +942,7 @@ int MinARTn::find_saddle( )
   // randomly displace the desired atoms: activation
   random_kick();
 
-  if (me == 0) write_header(3);
+  if (me == 0) print_info(3);
 
   int nmax_perp = max_perp_move_h;
 
@@ -1025,7 +1024,7 @@ int MinARTn::find_saddle( )
         if (screen && it%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
         ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       
-        write_header(4);
+        print_info(4);
       }
 
       flag = 1;
@@ -1044,7 +1043,7 @@ int MinARTn::find_saddle( )
       if (screen && (max_iter_basin-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
       ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
 
-      write_header(5);
+      print_info(5);
     }
     reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
@@ -1054,7 +1053,7 @@ int MinARTn::find_saddle( )
 
   flag = 0; ++stage;
 
-  if (me == 0) write_header(6);
+  if (me == 0) print_info(6);
 
   double hdot , hdotall, tmpsum, tmpsumall;
 
@@ -1160,7 +1159,7 @@ int MinARTn::find_saddle( )
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
         it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
-        write_header(7);
+        print_info(7);
       }
 
       reset_x00();
@@ -1177,7 +1176,7 @@ int MinARTn::find_saddle( )
         it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
         idum = it_s;
-        write_header(8);
+        print_info(8);
       }
 
       return 1;
@@ -1199,7 +1198,7 @@ int MinARTn::find_saddle( )
     if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %6.3f " BIGINT_FORMAT "\n",
     (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
-    write_header(9);
+    print_info(9);
   }
 
   reset_x00();
@@ -1284,7 +1283,7 @@ void MinARTn::random_kick()
 
   double cord[3];
 
-  delpos = fix_minimize->request_vector(4);
+  double *delpos = fix_minimize->request_vector(4);
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   int nlocal = atom->nlocal;
   int *tag   = atom->tag;
@@ -1513,7 +1512,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       lanc[n-1][i] = q_k[i];
     }
 
-    reset_coords();
+    //reset_coords();
     // random move to caculate u(k) with the finite difference approximation
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i] + q_k[i] * DEL_LANCZOS;
 
@@ -1791,7 +1790,7 @@ return;
 /* -------------------------------------------------------------------------------------------------
  *  Write out related info
 ------------------------------------------------------------------------------------------------- */
-void MinARTn::write_header(const int flag)
+void MinARTn::print_info(const int flag)
 {
   if (flag == -1){
     if (fp1) fprintf(fp1, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
@@ -1933,7 +1932,7 @@ return;
 void MinARTn::sad_converge(int maxiter)
 {
   ++stage;
-  if (me == 0) write_header(10);
+  if (me == 0) print_info(10);
 
   neval = 0;
   int i,fail;
@@ -1958,9 +1957,8 @@ void MinARTn::sad_converge(int maxiter)
     if (neval >= update->max_eval) {stop_condition = MAXEVAL; break;}
 
     // energy tolerance criterion
-    if (fabs(ecurrent-eprevious) < update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY)){
-      stop_condition = ETOL; break;
-    }
+    if (fabs(ecurrent-eprevious) < update->etol * 0.5*(fabs(ecurrent)
+    + fabs(eprevious) + EPS_ENERGY)) {stop_condition = ETOL; break;}
 
     // force tolerance criterion
     double fdotf = fnorm_sqr();
