@@ -82,23 +82,13 @@ int MinARTn::iterate(int maxevent)
   max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
-  char str[MAXLINE];
-  if (me == 0){
-    sprintf(str, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
-    if (fp1) fprintf(fp1, "%s", str);
-    if (screen) fprintf(screen, "%s", str);
-  }
+  if (me == 0) write_header(-1);
 
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
-  if (me == 0 && fp1){
-    fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
-    fprintf(fp1, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
-    fprintf(fp1, "  - Temperature               : %lg\n", temperature);
-  }
-
+  if (me == 0) write_header(0);
   if (flag_press){
     pressure->compute_vector();
     double * press = pressure->vector;
@@ -147,7 +137,7 @@ int MinARTn::iterate(int maxevent)
     }
 
     push_down();
-    check_new_min();
+    metropolis();
 
     if (ievent >= max_num_events) break;
   }
@@ -199,8 +189,8 @@ int MinARTn::check_sad2min()
     }
   } else {
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g of initial activation, reject the new saddle.\n", ref_id, dist2all, init_step_size);
-      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g of initial activation, reject the new saddle.\n", ref_id, dist2all, init_step_size);
+      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g of initial activation, rejected.\n", ref_id, dist2all, init_step_size);
+      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g of initial activation, rejected.\n", ref_id, dist2all, init_step_size);
     }
     status = 1;
   }
@@ -408,7 +398,7 @@ return;
 /* -------------------------------------------------------------------------------------------------
  * decide whether reject or accept the new configuration
 ------------------------------------------------------------------------------------------------- */
-void MinARTn::check_new_min()
+void MinARTn::metropolis()
 {
   reset_x00();
   // output reference energy ,current energy and pressure.
@@ -416,10 +406,9 @@ void MinARTn::check_new_min()
 
   double dr = 0., drall;
   double **x = atom->x;
-  int nlocal = atom->nlocal;
+  int nlocal = atom->nlocal, n = 0;
   double dx,dy,dz;
   double tmp_me[2], tmp_all[2]; tmp_all[0] = tmp_all[1] = 0.;
-  int n = 0;
 
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
@@ -476,8 +465,8 @@ void MinARTn::check_new_min()
 
   if (acc){
     if (me == 0) write_header(13);
-
     ref_id = min_id; eref = ecurrent;
+
   } else {
     if (me == 0) write_header(14);
 
@@ -557,6 +546,7 @@ void MinARTn::read_control()
   char *fmin, *fsad; fmin = fsad = NULL;
   if (fp == NULL){
     if(screen) fprintf(screen, "Cannot open ARTn control parameter file. Use default parameters for ARTn.\n");
+
   } else {
     while (1) {
       fgets(oneline, MAXLINE, fp);
@@ -568,160 +558,160 @@ void MinARTn::read_control()
       if (token1 == NULL) continue;
       token2 = strtok(NULL," \t\n\r\f");
       if (token2 == NULL){
-	sprintf(str, "Insufficient parameter for %s of ARTn!", token1);
-	error->all(FLERR, str);
+        sprintf(str, "Insufficient parameter for %s of ARTn!", token1);
+        error->all(FLERR, str);
       }
 
       if (strcmp(token1, "random_seed") == 0){
-	seed = atoi(token2);
-	if (seed < 1) error->all(FLERR, "seed must be greater than 0");
+        seed = atoi(token2);
+        if (seed < 1) error->all(FLERR, "seed must be greater than 0");
 
       } else if (strcmp(token1, "temperature") == 0){
-	temperature = atof(token2);
+        temperature = atof(token2);
 
       } else if (strcmp(token1, "max_num_events") == 0){
-	max_num_events = atoi(token2);
-	if (max_num_events < 1) error->all(FLERR, "max_num_events must be greater than 0");
+        max_num_events = atoi(token2);
+        if (max_num_events < 1) error->all(FLERR, "max_num_events must be greater than 0");
 
       } else if (strcmp(token1, "max_activat_iter") == 0){
-	max_activat_iter = atoi(token2);
-	if (max_activat_iter < 1) error->all(FLERR, "max_activat_iter must be greater than 0");
+        max_activat_iter = atoi(token2);
+        if (max_activat_iter < 1) error->all(FLERR, "max_activat_iter must be greater than 0");
 
       } else if (strcmp(token1, "increment_size") == 0){
-	increment_size = atof(token2);
-	if (increment_size <= 0.) error->all(FLERR, "increment_size must be greater than 0.");
+        increment_size = atof(token2);
+        if (increment_size <= 0.) error->all(FLERR, "increment_size must be greater than 0.");
 
       } else if (!strcmp(token1, "cluster_radius")){
-	cluster_radius = atof(token2);
+        cluster_radius = atof(token2);
 
       } else if (strcmp(token1, "group_4_activat") == 0){
-	if (groupname) delete [] groupname;
-	groupname = new char [strlen(token2)+1];
-	strcpy(groupname, token2);
+        if (groupname) delete [] groupname;
+        groupname = new char [strlen(token2)+1];
+        strcpy(groupname, token2);
 
       } else if (strcmp(token1, "init_step_size") == 0){
-	init_step_size = atof(token2);
-	if (init_step_size <= 0.) error->all(FLERR, "init_step_size must be greater than 0.");
+        init_step_size = atof(token2);
+        if (init_step_size <= 0.) error->all(FLERR, "init_step_size must be greater than 0.");
 
       } else if (strcmp(token1, "basin_factor") == 0){
-	basin_factor = atof(token2);
-	if (basin_factor <= 0.) error->all(FLERR, "basin_factor must be greater than 0.");
+        basin_factor = atof(token2);
+        if (basin_factor <= 0.) error->all(FLERR, "basin_factor must be greater than 0.");
 
       } else if (strcmp(token1, "max_perp_move_h") == 0){
-	max_perp_move_h = atoi(token2);
-	if (max_perp_move_h < 1) error->all(FLERR, "max_perp_move_h must be greater than 0.");
+        max_perp_move_h = atoi(token2);
+        if (max_perp_move_h < 1) error->all(FLERR, "max_perp_move_h must be greater than 0.");
 
       } else if (strcmp(token1, "min_num_ksteps") == 0){
-	min_num_ksteps = atoi(token2);
-	if (min_num_ksteps < 1) error->all(FLERR, "min_num_ksteps must be greater than 0");
+        min_num_ksteps = atoi(token2);
+        if (min_num_ksteps < 1) error->all(FLERR, "min_num_ksteps must be greater than 0");
 
       } else if (strcmp(token1, "eigen_th_well") == 0){
-	eigen_th_well = atof(token2);
-	if (eigen_th_well > 0.) error->all(FLERR, "eigen_th_well must be less than 0.");
+        eigen_th_well = atof(token2);
+        if (eigen_th_well > 0.) error->all(FLERR, "eigen_th_well must be less than 0.");
 
       } else if (strcmp(token1, "max_iter_basin") == 0){
-	max_iter_basin = atoi(token2);
-	if (max_iter_basin < 1) error->all(FLERR, "max_iter_basin must be greater than 0");
+        max_iter_basin = atoi(token2);
+        if (max_iter_basin < 1) error->all(FLERR, "max_iter_basin must be greater than 0");
 
       } else if (strcmp(token1, "force_th_perp_h") == 0){
-	force_th_perp_h = atof(token2);
-	if (force_th_perp_h <= 0.) error->all(FLERR, "force_th_perp_h must be greater than 0.");
+        force_th_perp_h = atof(token2);
+        if (force_th_perp_h <= 0.) error->all(FLERR, "force_th_perp_h must be greater than 0.");
 
       } else if (strcmp(token1, "num_lancz_vec_h") == 0){
-	num_lancz_vec_h = atoi(token2);
-	if (num_lancz_vec_h < 1) error->all(FLERR, "num_lancz_vec_h must be greater than 0");
+        num_lancz_vec_h = atoi(token2);
+        if (num_lancz_vec_h < 1) error->all(FLERR, "num_lancz_vec_h must be greater than 0");
 
       } else if (strcmp(token1, "num_lancz_vec_c") == 0){
-	num_lancz_vec_c = atoi(token2);
-	if (num_lancz_vec_c < 1) error->all(FLERR, "num_lancz_vec_c must be greater than 0");
+        num_lancz_vec_c = atoi(token2);
+        if (num_lancz_vec_c < 1) error->all(FLERR, "num_lancz_vec_c must be greater than 0");
 
       } else if (strcmp(token1, "del_disp_lancz") == 0){
-	del_disp_lancz = atof(token2);
-	if (del_disp_lancz  <=  0.) error->all(FLERR, "del_disp_lancz must be greater than 0.");
+        del_disp_lancz = atof(token2);
+        if (del_disp_lancz  <=  0.) error->all(FLERR, "del_disp_lancz must be greater than 0.");
 
       } else if (strcmp(token1, "eigen_th_lancz") == 0){
-	eigen_th_lancz = atof(token2);
-	if (eigen_th_lancz <=  0.) error->all(FLERR, "eigen_th_lancz must be greater than 0.");
+        eigen_th_lancz = atof(token2);
+        if (eigen_th_lancz <=  0.) error->all(FLERR, "eigen_th_lancz must be greater than 0.");
 
       } else if (strcmp(token1, "force_th_saddle") == 0){
-	force_th_saddle = atof(token2);
-	if (force_th_saddle <=  0.) error->all(FLERR, "force_th_saddle must be greater than 0.");
+        force_th_saddle = atof(token2);
+        if (force_th_saddle <=  0.) error->all(FLERR, "force_th_saddle must be greater than 0.");
 
       } else if (strcmp(token1, "push_over_saddle") == 0){
-	push_over_saddle = atof(token2);
-	if (push_over_saddle <=  0.) error->all(FLERR, "push_over_saddle must be greater than 0.");
+        push_over_saddle = atof(token2);
+        if (push_over_saddle <=  0.) error->all(FLERR, "push_over_saddle must be greater than 0.");
 
       } else if (strcmp(token1, "eigen_th_fail") == 0){
-	eigen_th_fail = atof(token2);
-	if (eigen_th_fail <=  0.) error->all(FLERR, "eigen_th_fail must be greater than 0.");
+        eigen_th_fail = atof(token2);
+        if (eigen_th_fail <=  0.) error->all(FLERR, "eigen_th_fail must be greater than 0.");
 
       } else if (!strcmp(token1, "atom_disp_thr")){
-	atom_disp_thr = atof(token2);
-	if (atom_disp_thr <= 0.) error->all(FLERR, "atom_disp_thr must be greater than 0.");
+        atom_disp_thr = atof(token2);
+        if (atom_disp_thr <= 0.) error->all(FLERR, "atom_disp_thr must be greater than 0.");
 
       } else if (strcmp(token1, "max_perp_moves_c") == 0){
-	max_perp_moves_c = atoi(token2);
-	if (max_perp_moves_c < 1) error->all(FLERR, "max_perp_moves_c must be greater than 0.");
+        max_perp_moves_c = atoi(token2);
+        if (max_perp_moves_c < 1) error->all(FLERR, "max_perp_moves_c must be greater than 0.");
 
       } else if (strcmp(token1, "force_th_perp_sad") == 0){
-	force_th_perp_sad = atof(token2);
-	if (force_th_perp_sad <= 0.) error->all(FLERR, "force_th_perp_sad must be greater than 0.");
+        force_th_perp_sad = atof(token2);
+        if (force_th_perp_sad <= 0.) error->all(FLERR, "force_th_perp_sad must be greater than 0.");
 
       } else if (strcmp(token1, "use_fire") == 0){
-	use_fire = atoi(token2);
+        use_fire = atoi(token2);
 
       } else if (!strcmp(token1, "flag_push_back")){
-	flag_push_back = atoi(token2);
+        flag_push_back = atoi(token2);
 
       } else if (!strcmp(token1, "flag_relax_sad")){
-	flag_relax_sad = atoi(token2);
+        flag_relax_sad = atoi(token2);
 
       } else if (!strcmp(token1, "max_disp_tol")){
-	max_disp_tol = atof(token2);
-	if (max_disp_tol <= 0.) error->all(FLERR, "max_disp_tol must be greater than 0.");
+        max_disp_tol = atof(token2);
+        if (max_disp_tol <= 0.) error->all(FLERR, "max_disp_tol must be greater than 0.");
 
       } else if (!strcmp(token1, "max_ener_tol")){
-	max_ener_tol = atof(token2);
-	if (max_ener_tol <= 0.) error->all(FLERR, "max_ener_tol must be greater than 0.");
+        max_ener_tol = atof(token2);
+        if (max_ener_tol <= 0.) error->all(FLERR, "max_ener_tol must be greater than 0.");
 
       } else if (!strcmp(token1, "flag_press")){
-	flag_press = atoi(token2);
+        flag_press = atoi(token2);
 
       } else if (!strcmp(token1, "log_file")){
-	if (flog) delete []flog;
-	flog = new char [strlen(token2)+1];
-	strcpy(flog, token2);
+        if (flog) delete []flog;
+        flog = new char [strlen(token2)+1];
+        strcpy(flog, token2);
 
       } else if (!strcmp(token1, "log_level")){
-	log_level = atoi(token2);
+        log_level = atoi(token2);
 
       } else if (!strcmp(token1, "print_freq")){
-	print_freq = atoi(token2);
+        print_freq = atoi(token2);
 
       } else if (strcmp(token1, "event_list_file") == 0){
-	if (fevent) delete [] fevent;
-	fevent = new char [strlen(token2)+1];
-	strcpy(fevent, token2);
+        if (fevent) delete [] fevent;
+        fevent = new char [strlen(token2)+1];
+        strcpy(fevent, token2);
 
       } else if (strcmp(token1, "init_config_id") == 0){
-	ref_id = atoi(token2);
+        ref_id = atoi(token2);
 
       } else if (strcmp(token1, "dump_min_config") == 0){
-	if (fmin) delete []fmin;
-	fmin = new char [strlen(token2)+1];
-	strcpy(fmin, token2);
+        if (fmin) delete []fmin;
+        fmin = new char [strlen(token2)+1];
+        strcpy(fmin, token2);
 
       } else if (strcmp(token1, "dump_sad_config") == 0){
-	if (fsad) delete []fsad;
-	fsad = new char [strlen(token2)+1];
-	strcpy(fsad, token2);
+        if (fsad) delete []fsad;
+        fsad = new char [strlen(token2)+1];
+        strcpy(fsad, token2);
 
       } else if (strcmp(token1, "conv_perp_inc") == 0){
-	conv_perp_inc = atoi(token2);
+        conv_perp_inc = atoi(token2);
 
       } else {
-	sprintf(str, "Unknown control parameter for ARTn: %s", token1);
-	error->all(FLERR, str);
+        sprintf(str, "Unknown control parameter for ARTn: %s", token1);
+        error->all(FLERR, str);
       }
     }
     fclose(fp);
@@ -747,7 +737,7 @@ void MinARTn::read_control()
   min_id = ref_0 = ref_id;
 
   // default group name is all
-  if (groupname == NULL){ groupname = new char [4]; strcpy(groupname, "all");}
+  if (groupname == NULL) {groupname = new char [4]; strcpy(groupname, "all");}
 
   int igroup = group->find(groupname);
 
@@ -918,7 +908,6 @@ void MinARTn::artn_reset_vec()
 {
   x0tmp = fix_minimize->request_vector(3);
   egvec = fix_minimize->request_vector(4);
-
   x00   = fix_minimize->request_vector(5);
   fperp = fix_minimize->request_vector(6);
 
@@ -926,7 +915,7 @@ return;
 }
 
 /* -------------------------------------------------------------------------------------------------
- * Try to find saddle point. If failed, return 0, else return 1
+ * Try to find saddle point. If failed, return 0; else return 1
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::find_saddle( )
 {
@@ -1804,15 +1793,31 @@ return;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::write_header(const int flag)
 {
-  if (flag == 1){
+  if (flag == -1){
+    if (fp1) fprintf(fp1, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
+    if (screen) fprintf(screen, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
+
+  } else if (flag == 0){
+    if (fp1){
+      fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(fp1, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
+      fprintf(fp1, "  - Temperature               : %lg\n", temperature);
+    }
+    if (screen){
+      fprintf(screen, "  - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(screen, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
+      fprintf(screen, "  - Temperature               : %lg\n", temperature);
+    }
+
+  } else if (flag == 1){
       fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10      11         12         13         14        15           16       17       18    19\n");
       fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz        pxy       pxz          pyz     Efinal   status dr\n");
-      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 2){
       fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10     11         12   13\n");
       fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
-      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#---------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 3){
     if (fp1){

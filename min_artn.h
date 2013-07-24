@@ -34,7 +34,7 @@ private:
 
   int push_back_sad();
   void push_down();
-  void check_new_min();
+  void metropolis();
 
   void artn_reset_vec();
   void reset_coords();
