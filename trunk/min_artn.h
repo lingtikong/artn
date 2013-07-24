@@ -85,7 +85,6 @@ private:
   int that, *glist;        // ID and list for kick
   char *groupname;         // group name for initial kick
   double cluster_radius;   // radius for kick; <0, all; ==0, single; >0, cluster
-  double *delpos;          // initial kick
 
   // for harmonic well
   double init_step_size;   // Size of initial displacement
@@ -117,7 +116,7 @@ private:
   int print_freq;          // default 1
 
   void artn_final();
-  void write_header(const int);
+  void print_info(const int);
 
   // center of mass info
   int groupall;
