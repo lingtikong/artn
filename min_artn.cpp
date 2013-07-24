@@ -25,7 +25,6 @@
 #define MAXLINE 512
 #define ZERO  1.e-10
 
-
 using namespace LAMMPS_NS;
 
 /* -------------------------------------------------------------------------------------------------
@@ -510,7 +509,7 @@ void MinARTn::set_defaults()
   max_num_events   = 1000;
   max_activat_iter = 100;
   increment_size   = 0.09;
-  use_fire         = 1;
+  use_fire         = 0;
   flag_push_back   = 0;
   flag_relax_sad   = 0;
   max_disp_tol     = 0.1;
@@ -522,9 +521,9 @@ void MinARTn::set_defaults()
   // for harmonic well
   init_step_size   = 0.05;
   basin_factor     = 2.1;
-  max_perp_move_h  = 8;
+  max_perp_move_h  = 10;
   min_num_ksteps   = 0;		
-  eigen_th_well    = -1.;
+  eigen_th_well    = -0.001;
   max_iter_basin   = 20;
   force_th_perp_h  = 0.5;
 
@@ -1076,11 +1075,6 @@ int MinARTn::find_saddle( )
 
     // g store old h
     for (int i = 0; i < nvec; ++i) g[i] = h[i];
-#ifdef TEST
-    double hm = 0.;
-    for(int i = 0; i < nvec; ++i) hm += h[i] * h[i];
-    fprintf(screen, "hold = %f\n",hm);
-#endif
 
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
@@ -1093,11 +1087,6 @@ int MinARTn::find_saddle( )
     if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
     else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
 
-#ifdef TEST
-    hm = 0.;
-    for(int i = 0; i < nvec; ++i) hm += h[i] * h[i];
-    fprintf(screen, "hnew = %f\n",hm);
-#endif
 
     for(int i = 0; i <nvec; ++i) hdot += h[i] * g[i];
     MPI_Reduce(&hdot,&hdotall,1,MPI_DOUBLE,MPI_SUM,0,world);
