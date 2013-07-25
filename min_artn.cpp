@@ -115,12 +115,12 @@ int MinARTn::iterate(int maxevent)
   int ievent = 0;
   while ( 1 ){
     stage = 1; ++nattempt;
-    while (! find_saddle() ){stage = 1; ++nattempt;}
+    while (find_saddle() == 0) {stage = 1; ++nattempt;}
 
     ++sad_found;
     if (check_sad2min()) continue;
 
-    if (flag_push_back) if (! push_back_sad()) continue;
+    if (flag_push_back) if (push_back_sad() == 0) continue;
     ++sad_id;
 
     if (flag_relax_sad) sad_converge(max_conv_steps);
@@ -169,9 +169,7 @@ int MinARTn::check_sad2min()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0];
-    dy -= dxcm[1];
-    dz -= dxcm[2];
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     dist2 += dx * dx + dy * dy + dz * dz;
 
     n += 3;
@@ -183,8 +181,8 @@ int MinARTn::check_sad2min()
   int status = 0;
   if (dist2all >= init_step_size){
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, acceptable.\n", ref_id, dist2all);
-      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, acceptable.\n", ref_id, dist2all);
+      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g of initial activation, acceptable.\n", ref_id, dist2all, init_step_size);
+      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g of initial acceptable, acceptable.\n", ref_id, dist2all, init_step_size);
     }
   } else {
     if (me == 0){
@@ -211,11 +209,13 @@ int MinARTn::push_back_sad()
 
   reset_x00();
   // check current center-of-mass
+/*
   group->xcm(groupall, masstot, com);
   double dxcm[3];
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
+*/
 
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
@@ -226,9 +226,7 @@ int MinARTn::push_back_sad()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0];
-    dy -= dxcm[1];
-    dz -= dxcm[2];
+    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -241,27 +239,15 @@ int MinARTn::push_back_sad()
     for (int i = 0; i < nvec; ++i) xvec[i] -= h[i] * push_over_saddle;
   }
 
-  //ecurrent = energy_force(1); ++evalf;
   if (me == 0) print_info(11);
 
-  // do minimization with CG
+  // minimization using CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
   reset_x00();
 
   // output minimization information
-  if (me == 0){
-    if (fp1) {
-      fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(fp1, "    - Current   energy (eV)     : %lg\n", ecurrent);
-      fprintf(fp1, "    - Reference energy (eV)     : %lg\n", eref);
-    }
-    if (screen) {
-      fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(screen, "    - Current   energy (eV)     : %lg\n", ecurrent);
-      fprintf(screen, "    - Reference energy (eV)     : %lg\n", eref);
-    }
-  }
+  if (me == 0) print_info(15);
   if ( fabs(ecurrent - eref) > max_ener_tol) {
     if (me == 0){
       if (fp1) fprintf(fp1, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), max_ener_tol);
@@ -273,6 +259,7 @@ int MinARTn::push_back_sad()
   }
 
   // check current center-of-mass
+  double dxcm[3];
   group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
@@ -288,12 +275,10 @@ int MinARTn::push_back_sad()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0];
-    dy -= dxcm[1];
-    dz -= dxcm[2];
-    n += 3;
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+
     tmp = dx*dx + dy*dy + dz*dz;
-    dr += tmp;
+    dr += tmp; n += 3;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
@@ -333,11 +318,13 @@ void MinARTn::push_down()
 {
   reset_x00();
   // check current center-of-mass
+/*
   group->xcm(groupall, masstot, com);
   double dxcm[3];
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
+*/
 
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
@@ -349,9 +336,7 @@ void MinARTn::push_down()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0];
-    dy -= dxcm[1];
-    dz -= dxcm[2];
+    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -401,13 +386,14 @@ void MinARTn::metropolis()
 {
   reset_x00();
   // output reference energy ,current energy and pressure.
-  if (me == 0 && fp2) fprintf(fp2, " %5d %4d %5d %7d %12.6f %12.6f", ref_id, sad_id, min_id, that, eref, ecurrent);
+  if (me == 0 && fp2) fprintf(fp2, " %5d %4d %5d %7d %10.3f %10.3f", ref_id, sad_id, min_id, that, eref, ecurrent);
 
   double dr = 0., drall;
   double **x = atom->x;
   int nlocal = atom->nlocal, n = 0;
   double dx,dy,dz;
-  double tmp_me[2], tmp_all[2]; tmp_all[0] = tmp_all[1] = 0.;
+  double disp_me[2], disp_all[2];
+  disp_all[0] = disp_all[1] = 0.;
 
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
@@ -416,8 +402,7 @@ void MinARTn::metropolis()
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
 
-  // calculate dr
-  // check minimum image
+  // calculate displacment w.r.t. ref
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
   int n_moved = 0, n_movedall;
   for (int i = 0; i < nlocal; ++i) {
@@ -425,17 +410,17 @@ void MinARTn::metropolis()
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
     domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0];
-    dy -= dxcm[1];
-    dz -= dxcm[2];
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+
     tmp = dx*dx + dy*dy + dz*dz;
-    dr += tmp;
-    if(tmp > disp_thr2) ++n_moved;
-    n += 3;
+    if (tmp > disp_thr2) ++n_moved;
+
+    dr += tmp; n += 3;
   }
-  tmp_me[0] = dr; tmp_me[1] = double(n_moved);
-  MPI_Reduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, 0, world);
-  drall = tmp_all[0]; n_movedall = int(tmp_all[1]);
+  disp_me[0] = dr; disp_me[1] = double(n_moved);
+  MPI_Reduce(disp_me, disp_all, 2, MPI_DOUBLE, MPI_SUM, 0, world);
+  drall = disp_all[0]; n_movedall = int(disp_all[1]);
+
   if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
 
   // set v = 0 to calculate pressure
@@ -476,7 +461,8 @@ void MinARTn::metropolis()
   }
 
   if (me == 0 && fp2){
-    fprintf(fp2, " %12.6f %2d %8.5f\n", ecurrent, acc, drall);
+    for (int i=0; i<3; ++i) dxcm[i] *= double(atom->natoms);
+    fprintf(fp2, " %12.5f %2d %9.5f %9.5f %9.5f %8.5f\n", ecurrent, acc, dxcm[0], dxcm[1], dxcm[2], drall);
     fflush(fp2);
   }
 
@@ -544,12 +530,12 @@ void MinARTn::read_control()
   FILE *fp = fopen("artn.control", "r");
   char *fmin, *fsad; fmin = fsad = NULL;
   if (fp == NULL){
-    if(screen) fprintf(screen, "Cannot open ARTn control parameter file. Use default parameters for ARTn.\n");
+    error->warning(FLERR, "Cannot open ARTn control parameter file. Default parameters will be used.\n");
 
   } else {
-    while (1) {
+    while ( 1 ) {
       fgets(oneline, MAXLINE, fp);
-      if(feof(fp)) break;
+      if (feof(fp)) break;
 
       if (token1 = strchr(oneline,'#')) *token1 = '\0';
 
@@ -1809,14 +1795,14 @@ void MinARTn::print_info(const int flag)
     }
 
   } else if (flag == 1){
-      fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10      11         12         13         14        15           16       17       18    19\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove    pxx        pyy        pzz        pxy       pxz          pyz     Efinal   status dr\n");
-      fprintf(fp2, "#--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10      11         12         13         14         15          16       17       18     19        20        21        22\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove    pxx        pyy        pzz        pxy        pxz         pyz     Efinal   status disp-x    disp-y    disp-z     dr\n");
+      fprintf(fp2, "#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2        3       4    5     6      7        8           9         10     11         12   13\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center    Eref        Emin      nMove  Efinal    status dr\n");
-      fprintf(fp2, "#---------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10     11         12     13       14        15     16\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove  Efinal    status disp-x   disp-y    disp-z   dr\n");
+      fprintf(fp2, "#---------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 3){
     if (fp1){
@@ -1920,8 +1906,19 @@ void MinARTn::print_info(const int flag)
   } else if (flag == 14){
     if (fp1) fprintf(fp1, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
     if (screen) fprintf(screen, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
-  }
 
+  } else if (flag == 15){
+    if (fp1) {
+      fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(fp1, "    - Current   energy (eV)     : %lg\n", ecurrent);
+      fprintf(fp1, "    - Reference energy (eV)     : %lg\n", eref);
+    }
+    if (screen) {
+      fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(screen, "    - Current   energy (eV)     : %lg\n", ecurrent);
+      fprintf(screen, "    - Reference energy (eV)     : %lg\n", eref);
+    }
+  }
 return;
 }
 
