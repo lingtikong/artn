@@ -784,7 +784,7 @@ void MinARTn::read_control()
     fprintf(fp1, "push_over_saddle  %20g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
     fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
     fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
-    fprintf(fp1, "\n# Output related parameters");
+    fprintf(fp1, "\n# Output related parameters\n");
     fprintf(fp1, "log_file          %20s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
     fprintf(fp1, "log_level         %20d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
     fprintf(fp1, "print_freq        %20d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
@@ -1788,12 +1788,12 @@ void MinARTn::print_info(const int flag)
     if (fp1){
       if (log_level) fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
       fprintf(fp1, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
-      fprintf(fp1, "  - Temperature               : %.6f\n", temperature);
+      fprintf(fp1, "  - Temperature   (eV)        : %.6f\n", temperature);
     }
     if (screen){
       if (log_level) fprintf(screen, "  - Minimizer stop condition  : %s\n",  stopstr);
       fprintf(screen, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
-      fprintf(screen, "  - Temperature               : %.6f\n", temperature);
+      fprintf(screen, "  - Temperature   (eV)        : %.6f\n", temperature);
     }
 
   } else if (flag == 1){
