@@ -83,7 +83,7 @@ int MinARTn::iterate(int maxevent)
   // minimize before searching saddle points.
   if (me == 0) print_info(-1);
 
-  stop_condition = min_converge(max_conv_steps); evalf += neval;
+  stop_condition = min_converge(max_conv_steps,0); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
@@ -163,8 +163,8 @@ int MinARTn::check_sad2min()
   // check the distance between new saddle and original min
   double dist2 = 0., dist2all;
   double dx, dy, dz;
-  int nlocal = atom->nlocal, n = 0;
-  for (int i = 0; i < nlocal; ++i){
+  int n = 0;
+  for (int i = 0; i < atom->nlocal; ++i){
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
@@ -206,7 +206,7 @@ int MinARTn::push_back_sad()
     fperp[i] = h[i]; // fperp store old eigenvector
   }
 
-  reset_x00();
+  //reset_x00();
   // check current center-of-mass
   double dxcm[3];
   group->xcm(groupall, masstot, com);
@@ -217,8 +217,8 @@ int MinARTn::push_back_sad()
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
-  int nlocal = atom->nlocal, n = 0;
-  for (int i = 0; i < nlocal; ++i){
+  int n = 0;
+  for (int i = 0; i < atom->nlocal; ++i){
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
@@ -239,8 +239,9 @@ int MinARTn::push_back_sad()
   if (me == 0) print_info(11);
 
   // minimization using CG
-  stop_condition = min_converge(max_conv_steps); evalf += neval;
+  stop_condition = min_converge(max_conv_steps,2); evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
+  reset_coords();
 
   double Ediff_max = MIN(max_ener_tol, Ed);
   // output minimization information
@@ -255,7 +256,6 @@ int MinARTn::push_back_sad()
     return 0;
   }
 
-  reset_x00();
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
@@ -264,8 +264,7 @@ int MinARTn::push_back_sad()
 
   double dr = 0., drall;
   n = 0;
-  for (int i = 0; i < nlocal; ++i) {
-    double tmp;
+  for (int i = 0; i < atom->nlocal; ++i) {
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
@@ -283,7 +282,7 @@ int MinARTn::push_back_sad()
       if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, drall, max_disp_tol);
     }
 
-    reset_coords();
+    //reset_coords();
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       h[i]    = fperp[i];
@@ -321,9 +320,8 @@ void MinARTn::push_down()
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
   double dx, dy, dz;
-  int nlocal = atom->nlocal;
   int n = 0;
-  for (int i = 0; i < nlocal; ++i){
+  for (int i = 0; i < atom->nlocal; ++i){
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
@@ -342,7 +340,7 @@ void MinARTn::push_down()
   if (me == 0) print_info(12);
 
   // do minimization with CG
-  stop_condition = min_converge(max_conv_steps); evalf += neval;
+  stop_condition = min_converge(max_conv_steps,1); evalf += neval;
   stopstr = stopstrings(stop_condition);
   artn_reset_vec();
 
@@ -366,13 +364,12 @@ return;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::metropolis()
 {
-  reset_x00();
+  //reset_x00();
   // output reference energy ,current energy and pressure.
   if (me == 0 && fp2) fprintf(fp2, " %5d %4d %5d %7d %10.3f %10.3f", ref_id, sad_id, min_id, that, eref, ecurrent);
 
   double dr = 0., drall;
   double **x = atom->x;
-  int nlocal = atom->nlocal, n = 0;
   double dx,dy,dz;
   double disp_me[2], disp_all[2];
   disp_all[0] = disp_all[1] = 0.;
@@ -386,8 +383,8 @@ void MinARTn::metropolis()
 
   // calculate displacment w.r.t. ref
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
-  int n_moved = 0, n_movedall;
-  for (int i = 0; i < nlocal; ++i) {
+  int n_moved = 0, n_movedall, n = 0;
+  for (int i = 0; i < atom->nlocal; ++i) {
     dx = x[i][0] - x00[n];
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
@@ -411,7 +408,7 @@ void MinARTn::metropolis()
 
     ++update->ntimestep;
     pressure->addstep(update->ntimestep);
-    energy_force(0); ++evalf;
+    energy_force(0); ++evalf; reset_x00();
     pressure->compute_vector();
     double * press = pressure->vector;
 
@@ -436,7 +433,6 @@ void MinARTn::metropolis()
   } else {
     if (me == 0) print_info(14);
 
-    reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();
@@ -853,11 +849,10 @@ void MinARTn::artn_init()
   // group list
   int *tag  = atom->tag;
   int *mask = atom->mask;
-  int nlocal = atom->nlocal;
-  int *llist; memory->create(llist, MAX(1,nlocal), "llist");
+  int *llist; memory->create(llist, MAX(1, atom->nlocal), "llist");
 
   int n = 0;
-  for (int i = 0; i < nlocal; ++i) if (mask[i] & groupbit) llist[n++] = tag[i];
+  for (int i = 0; i < atom->nlocal; ++i) if (mask[i] & groupbit) llist[n++] = tag[i];
 
   int nsingle = n, nall;
   MPI_Allreduce(&nsingle,&nall,1,MPI_INT,MPI_SUM,world);
@@ -932,7 +927,7 @@ int MinARTn::find_saddle( )
   for (int it = 0; it < max_iter_basin; ++it){
     // minimizing perpendicularly by using SD method
     ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
+    artn_reset_vec(); reset_x00();
 
     m_perp = nfail = trial = 0;
     step = increment_size;
@@ -955,7 +950,7 @@ int MinARTn::find_saddle( )
         xvec[i] += step * fperp[i];
       }
       ecurrent = energy_force(1); ++evalf;
-      artn_reset_vec();
+      artn_reset_vec(); reset_coords();
       
       if (ecurrent < preenergy){
         step *= 1.2;
@@ -963,11 +958,10 @@ int MinARTn::find_saddle( )
         preenergy = ecurrent;
 
       } else {
-        reset_coords();
         for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
         step *= 0.6; ++nfail;
         ecurrent = energy_force(1); ++evalf;
-        artn_reset_vec();
+        artn_reset_vec(); reset_x00();
       }
       ++trial;
     }
@@ -1090,7 +1084,7 @@ int MinARTn::find_saddle( )
           xvec[i] += step * fperp[i];
         }
         ecurrent = energy_force(1); ++evalf;
-        artn_reset_vec();
+        artn_reset_vec(); reset_coords(); 
         
         if (ecurrent < preenergy){
           step *= 1.2;
@@ -1098,11 +1092,10 @@ int MinARTn::find_saddle( )
           preenergy = ecurrent;
         
         } else {
-          reset_coords();
           for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
           step *= 0.6; ++nfail;
           ecurrent = energy_force(1); ++evalf;
-          artn_reset_vec();
+          artn_reset_vec(); reset_x00();
         }
         ++trial;
       }
@@ -1185,18 +1178,20 @@ int MinARTn::find_saddle( )
   
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
+/*
     tmpsum = tmpsumall = 0.;
     for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
     MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
     if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
     else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
+*/
 
 #define MinEGV 0.1 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
     for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
     ecurrent = energy_force(1); ++evalf;
-    artn_reset_vec();
+    artn_reset_vec(); reset_x00();
   }
 
   Ed = ecurrent - eref;
@@ -1241,6 +1236,8 @@ void MinARTn::reset_coords()
   }
 
   domain->set_global_box();
+
+  reset_x00();
 
 return;
 }
@@ -1375,7 +1372,7 @@ return;
 /* -----------------------------------------------------------------------------
  * converge to minimum, here I use conjugate gradient method.
  * ---------------------------------------------------------------------------*/
-int MinARTn::min_converge(int maxiter)
+int MinARTn::min_converge(int maxiter, const int flag)
 {
   neval = 0;
   int i,fail;
@@ -1445,6 +1442,8 @@ int MinARTn::min_converge(int maxiter)
     MPI_Allreduce(dot,dotall,1,MPI_DOUBLE,MPI_SUM,world);
 
     if (dotall[0] <= 0.) for (i = 0; i < nvec; ++i) h[i] = g[i];
+    if (flag == 2) reset_coords();
+    else if (flag == 1) reset_x00();
   }
 
 return MAXITER;
@@ -1716,10 +1715,9 @@ int MinARTn::min_perp_fire(int maxiter)
     int *type = atom->type;
     double dtfm;
     double dtf = dt * force->ftm2v;
-    int nlocal = atom->nlocal;
     int n = 0;
     if (rmass) {
-      for (int i = 0; i < nlocal; ++i) {
+      for (int i = 0; i < atom->nlocal; ++i) {
         dtfm = dtf / rmass[i];
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
@@ -1729,7 +1727,7 @@ int MinARTn::min_perp_fire(int maxiter)
         v[i][2] += dtfm * fperp[n++];
       }
     } else {
-      for (int i = 0; i < nlocal; ++i) {
+      for (int i = 0; i < atom->nlocal; ++i) {
         dtfm = dtf / mass[type[i]];
         x[i][0] += dt * v[i][0];
         x[i][1] += dt * v[i][1];
