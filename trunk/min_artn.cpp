@@ -257,16 +257,13 @@ int MinARTn::push_back_sad()
 
   reset_x00();
   // check current center-of-mass
-  //double dxcm[3];
   group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
 
   double dr = 0., drall;
-  double **x = atom->x;
   n = 0;
-  //double tmpthre = atom_disp_thr * atom_disp_thr;
   for (int i = 0; i < nlocal; ++i) {
     double tmp;
     dx = xvec[n]   - x00[n];
@@ -274,6 +271,7 @@ int MinARTn::push_back_sad()
     dz = xvec[n+2] - x00[n+2];
     //domain->minimum_image(dx,dy,dz);
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    //domain->minimum_image(dx,dy,dz);
 
     tmp = dx*dx + dy*dy + dz*dz;
     dr += tmp; n += 3;
@@ -476,11 +474,11 @@ void MinARTn::set_defaults()
   min_num_ksteps   = 0;		
   increment_size   = 0.09;
   force_th_perp_h  = 0.5;
-  eigen_th_well    = -0.001;
+  eigen_th_well    = -0.01;
 
   // activation, converge to saddle
-  max_activat_iter = 100;
-  use_fire         = 0;
+  max_activat_iter  = 100;
+  use_fire          = 0;
   force_th_saddle   = 0.1;
   eigen_th_fail     = 0.1;
   conv_perp_inc     = 40;
@@ -488,26 +486,26 @@ void MinARTn::set_defaults()
   force_th_perp_sad = 0.05;
 
   // confirmatom of new saddle
-  disp_sad2min_thr  = -1.;
+  disp_sad2min_thr = -1.;
   flag_push_back   = 0;
   max_disp_tol     = 0.1;
   max_ener_tol     = 0.1;
   flag_relax_sad   = 0;
 
   // convergence to new minimum
-  push_over_saddle  = 0.3;
+  push_over_saddle = 0.3;
   atom_disp_thr    = 0.1;
   temperature      = -0.5;
 
   // for lanczos
-  num_lancz_vec_h   = 30;
-  num_lancz_vec_c   = 15;
-  del_disp_lancz    = 0.01;
-  eigen_th_lancz    = 0.01;
+  num_lancz_vec_h  = 30;
+  num_lancz_vec_c  = 20;
+  del_disp_lancz   = 0.01;
+  eigen_th_lancz   = 0.01;
 
   // output
-  log_level         = 1;
-  print_freq        = 1;
+  log_level        = 1;
+  print_freq       = 1;
 
 return;
 }
@@ -1118,7 +1116,7 @@ int MinARTn::find_saddle( )
       tmp_me[2] += fvec[i] * h[i];
     }
     MPI_Allreduce(tmp_me, tmp_all, 3, MPI_DOUBLE, MPI_SUM, world);
-    ftotall = sqrt(tmp_all[0]); delr = tmp_all[1]; fpar2all = tmp_all[2];
+    ftotall = sqrt(tmp_all[0]); delr = sqrt(tmp_all[1]); fpar2all = tmp_all[2];
     if (fpar2all > -1.) inc = conv_perp_inc;
    
     // output information
@@ -1130,7 +1128,6 @@ int MinARTn::find_saddle( )
     MPI_Reduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,0,world);
   
     if (me == 0){
-      delr = sqrt(delr);
       fperp2 = sqrt(fperp2all);
       if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
       it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
@@ -1146,6 +1143,23 @@ int MinARTn::find_saddle( )
         it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         print_info(7);
+      }
+
+      reset_x00();
+      for(int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+  
+      return 0;
+    }
+
+    if (delr < disp_sad2min_thr){
+      if (me == 0){
+        if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+ 
+        ddum = delr;
+        print_info(-7);
       }
 
       reset_x00();
@@ -1169,7 +1183,7 @@ int MinARTn::find_saddle( )
     }
   
     // caculate egvec use lanczos
-    lanczos(flag_egvec, 1, num_lancz_vec_c);
+    nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
 #define MinEGV 0.1 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
@@ -1179,10 +1193,10 @@ int MinARTn::find_saddle( )
   }
 
   if (me == 0){
-    if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
-    if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %10.5f %10.5f %10.5f %10.5f %10.5f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial,ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
+    (max_activat_iter-1), ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
     print_info(9);
   }
@@ -1869,6 +1883,16 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, egval, eigen_th_fail);
     }
 
+  } else if (flag == -7){
+    if (fp1){
+      if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(fp1, "  Stage %d failed, the distance to min-%d is %g < %g\n", stage, ref_id, ddum, disp_sad2min_thr);
+    }
+    if (screen){
+      fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
+      fprintf(screen, "  Stage %d failed, the distance to min-%d is %g < %g\n", stage, ref_id, ddum, disp_sad2min_thr);
+    }
+
   } else if (flag == 8){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
@@ -1894,8 +1918,8 @@ void MinARTn::print_info(const int flag)
     if (screen) fprintf(screen, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
 
   } else if (flag == 11){
-    if (fp1) fprintf(fp1, "  Stage %d, puch back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
-    if (screen) fprintf(screen, "  Stage %d, puch back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
+    if (fp1) fprintf(fp1, "  Stage %d, push back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
+    if (screen) fprintf(screen, "  Stage %d, push back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
 
   } else if (flag == 12){
     if (fp1) fprintf(fp1, "  Stage %d, push over the new saddle, Enew: %g; Eref= %g. Relaxing...\n", stage, ecurrent, eref);
