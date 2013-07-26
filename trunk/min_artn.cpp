@@ -168,7 +168,7 @@ int MinARTn::check_sad2min()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    domain->minimum_image(dx,dy,dz);
+    //domain->minimum_image(dx,dy,dz);
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     dist2 += dx * dx + dy * dy + dz * dz;
 
@@ -179,15 +179,15 @@ int MinARTn::check_sad2min()
   dist2all = sqrt(dist2all);
 
   int status = 0;
-  if (dist2all >= init_step_size){
+  if (dist2all >= disp_sad2min_thr){
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g of initial activation, acceptable.\n", ref_id, dist2all, init_step_size);
-      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g of initial acceptable, acceptable.\n", ref_id, dist2all, init_step_size);
+      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist2all, disp_sad2min_thr);
+      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist2all, disp_sad2min_thr);
     }
   } else {
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g of initial activation, rejected.\n", ref_id, dist2all, init_step_size);
-      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g of initial activation, rejected.\n", ref_id, dist2all, init_step_size);
+      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist2all, disp_sad2min_thr);
+      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist2all, disp_sad2min_thr);
     }
     status = 1;
   }
@@ -209,13 +209,11 @@ int MinARTn::push_back_sad()
 
   reset_x00();
   // check current center-of-mass
-/*
   group->xcm(groupall, masstot, com);
   double dxcm[3];
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
-*/
 
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
@@ -225,8 +223,8 @@ int MinARTn::push_back_sad()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    domain->minimum_image(dx,dy,dz);
-    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    //domain->minimum_image(dx,dy,dz);
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -244,7 +242,6 @@ int MinARTn::push_back_sad()
   // minimization using CG
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
-  reset_x00();
 
   // output minimization information
   if (me == 0) print_info(15);
@@ -258,8 +255,9 @@ int MinARTn::push_back_sad()
     return 0;
   }
 
+  reset_x00();
   // check current center-of-mass
-  double dxcm[3];
+  //double dxcm[3];
   group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
@@ -271,10 +269,10 @@ int MinARTn::push_back_sad()
   //double tmpthre = atom_disp_thr * atom_disp_thr;
   for (int i = 0; i < nlocal; ++i) {
     double tmp;
-    dx = x[i][0] - x00[n];
-    dy = x[i][1] - x00[n+1];
-    dz = x[i][2] - x00[n+2];
-    domain->minimum_image(dx,dy,dz);
+    dx = xvec[n]   - x00[n];
+    dy = xvec[n+1] - x00[n+1];
+    dz = xvec[n+2] - x00[n+2];
+    //domain->minimum_image(dx,dy,dz);
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
 
     tmp = dx*dx + dy*dy + dz*dz;
@@ -301,8 +299,8 @@ int MinARTn::push_back_sad()
   } else {
 
     if (me == 0){
-      if (fp1) fprintf(fp1, "  Stage %d failed, dr = %g > %g, reject the new saddle.\n", stage, drall, max_disp_tol);
-      if (screen) fprintf(screen, "  Stage %d failed, dr = %g > %g, reject the new saddle.\n", stage, drall, max_disp_tol);
+      if (fp1) fprintf(fp1, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, drall, max_disp_tol);
+      if (screen) fprintf(screen, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, drall, max_disp_tol);
     }
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
@@ -318,13 +316,11 @@ void MinARTn::push_down()
 {
   reset_x00();
   // check current center-of-mass
-/*
   group->xcm(groupall, masstot, com);
   double dxcm[3];
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
-*/
 
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
@@ -335,8 +331,8 @@ void MinARTn::push_down()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    domain->minimum_image(dx,dy,dz);
-    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    //domain->minimum_image(dx,dy,dz);
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -355,18 +351,8 @@ void MinARTn::push_down()
   artn_reset_vec();
 
   // output minimization information
-  if (me == 0){
-    if (fp1){
-      fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(fp1, "      - Current  min  energy (eV) : %lg\n", ecurrent);
-    }
-    if (screen){
-      fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(screen, "      - Current  min  energy (eV) : %lg\n", ecurrent);
-    }
-  }
+  if (me == 0) print_info(16);
+
   // store min configuration
   ++min_id;
   if (dumpmin){
@@ -409,7 +395,7 @@ void MinARTn::metropolis()
     dx = x[i][0] - x00[n];
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
-    domain->minimum_image(dx,dy,dz);
+    //domain->minimum_image(dx,dy,dz);
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
 
     tmp = dx*dx + dy*dy + dz*dz;
@@ -440,8 +426,8 @@ void MinARTn::metropolis()
   int acc = 0;
   if (me == 0){
     drall = sqrt(drall);
-    if (fp1) fprintf(fp1, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
-    if (screen) fprintf(screen, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
+    if (fp1 && log_level) fprintf(fp1, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
+    if (screen && log_level) fprintf(screen, "      - Distance to min-%8.8d  : %g\n", ref_id, drall);
 
     if (temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature))) acc = 1;
   }
@@ -474,32 +460,44 @@ return;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::set_defaults()
 {
+  // global
   seed = 12345;
   nattempt = ref_id = min_id = sad_id = 0;
   sad_found = 0;
-
-  // for art
-  temperature      = -0.5;
   max_num_events   = 1000;
-  max_activat_iter = 100;
-  increment_size   = 0.09;
-  use_fire         = 0;
-  flag_push_back   = 0;
-  flag_relax_sad   = 0;
-  max_disp_tol     = 0.1;
-  max_ener_tol     = 0.1;
   flag_press       = 0;
-  atom_disp_thr    = 0.1;
-  cluster_radius   = 5.0;
 
-  // for harmonic well
+  // activation, harmonic well escape
+  cluster_radius   = 5.0;
   init_step_size   = 0.05;
   basin_factor     = 2.1;
   max_perp_move_h  = 10;
-  min_num_ksteps   = 0;		
-  eigen_th_well    = -0.001;
   max_iter_basin   = 20;
+  min_num_ksteps   = 0;		
+  increment_size   = 0.09;
   force_th_perp_h  = 0.5;
+  eigen_th_well    = -0.001;
+
+  // activation, converge to saddle
+  max_activat_iter = 100;
+  use_fire         = 0;
+  force_th_saddle   = 0.1;
+  eigen_th_fail     = 0.1;
+  conv_perp_inc     = 40;
+  max_perp_moves_c  = 15;
+  force_th_perp_sad = 0.05;
+
+  // confirmatom of new saddle
+  disp_sad2min_thr  = -1.;
+  flag_push_back   = 0;
+  max_disp_tol     = 0.1;
+  max_ener_tol     = 0.1;
+  flag_relax_sad   = 0;
+
+  // convergence to new minimum
+  push_over_saddle  = 0.3;
+  atom_disp_thr    = 0.1;
+  temperature      = -0.5;
 
   // for lanczos
   num_lancz_vec_h   = 30;
@@ -507,14 +505,7 @@ void MinARTn::set_defaults()
   del_disp_lancz    = 0.01;
   eigen_th_lancz    = 0.01;
 
-  // for convergence
-  force_th_saddle   = 0.1;
-  push_over_saddle  = 0.3;
-  eigen_th_fail     = 0.1;
-  max_perp_moves_c  = 15;
-  force_th_perp_sad = 0.05;
-  conv_perp_inc     = 40;
-
+  // output
   log_level         = 1;
   print_freq        = 1;
 
@@ -622,6 +613,10 @@ void MinARTn::read_control()
         force_th_saddle = atof(token2);
         if (force_th_saddle <=  0.) error->all(FLERR, "force_th_saddle must be greater than 0.");
 
+      } else if (strcmp(token1, "disp_sad2min_thr") == 0){
+        disp_sad2min_thr = atof(token2);
+        if (disp_sad2min_thr <=  0.) error->all(FLERR, "disp_sad2min_thr must be greater than 0.");
+
       } else if (strcmp(token1, "push_over_saddle") == 0){
         push_over_saddle = atof(token2);
         if (push_over_saddle <=  0.) error->all(FLERR, "push_over_saddle must be greater than 0.");
@@ -721,6 +716,9 @@ void MinARTn::read_control()
   }
   min_id = ref_0 = ref_id;
 
+  // if disp_sad2min_thr not set, set as twice init_step_size
+  if (disp_sad2min_thr <= 0.) disp_sad2min_thr = init_step_size + init_step_size;
+
   // default group name is all
   if (groupname == NULL) {groupname = new char [4]; strcpy(groupname, "all");}
 
@@ -747,48 +745,50 @@ void MinARTn::read_control()
     }
 
     fprintf(fp1, "\n===================================== ARTn based on LAMMPS ========================================\n");
-    fprintf(fp1, "random_seed       %20d  # %s\n", seed, "Seed for random generator");
-    fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
-    fprintf(fp1, "\n");
+    fprintf(fp1, "# global control parameters\n");
     fprintf(fp1, "max_num_events    %20d  # %s\n", max_num_events,"Max number of events");
-    fprintf(fp1, "max_activat_iter  %20d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
-    fprintf(fp1, "increment_size    %20g  # %s\n", increment_size, "Overall scale for the increment moves");
+    fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
+    fprintf(fp1, "random_seed       %20d  # %s\n", seed, "Seed for random generator");
+    fprintf(fp1, "init_config_id    %20d  # %s\n", min_id, "ID of the initial stable configuration");
+    fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat   %20s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "cluster_radius    %20g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
     fprintf(fp1, "init_step_size    %20g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
-    fprintf(fp1, "use_fire          %20d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle?");
-    fprintf(fp1, "\n");
     fprintf(fp1, "basin_factor      %20g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
-    fprintf(fp1, "max_perp_move_h   %20d  # %s\n", max_perp_move_h, "Max # of perpendicular steps leaving basin");
     fprintf(fp1, "min_num_ksteps    %20d  # %s\n", min_num_ksteps, "Min # of k-steps before calling Lanczos");
-    fprintf(fp1, "eigen_th_well     %20g  # %s\n", eigen_th_well, "Eigenvalue threshold for leaving basin");
+    fprintf(fp1, "max_perp_move_h   %20d  # %s\n", max_perp_move_h, "Max # of perpendicular steps leaving basin");
     fprintf(fp1, "max_iter_basin    %20d  # %s\n", max_iter_basin, "Maximum # of iteration for leaving the basin");
+    fprintf(fp1, "increment_size    %20g  # %s\n", increment_size, "Overall scale for the increment moves");
     fprintf(fp1, "force_th_perp_h   %20g  # %s\n", force_th_perp_h, "Perpendicular force threshold in harmonic well");
-    fprintf(fp1, "\n");
+    fprintf(fp1, "eigen_th_well     %20g  # %s\n", eigen_th_well, "Eigenvalue threshold for leaving basin");
+    fprintf(fp1, "\n# activation, converging to saddle\n");
+    fprintf(fp1, "max_activat_iter  %20d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
+    fprintf(fp1, "use_fire          %20d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle?");
+    fprintf(fp1, "eigen_th_fail     %20g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
+    fprintf(fp1, "force_th_saddle   %20g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
+    fprintf(fp1, "conv_perp_inc     %20d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
+    fprintf(fp1, "max_perp_moves_c  %20d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
+    fprintf(fp1, "force_th_perp_sad %20g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
+    fprintf(fp1, "\n# confirmation of new found saddle\n");
+    fprintf(fp1, "disp_sad2min_thr  %20g  # %s\n", disp_sad2min_thr, "Minimum distance between saddle and original minimum");
+    fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
+    fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
+    fprintf(fp1, "max_ener_tol      %20g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
+    fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
+    fprintf(fp1, "\n# Lanczos related parameters\n");
     fprintf(fp1, "num_lancz_vec_h   %20d  # %s\n", num_lancz_vec_h, "Num of vectors included in Lanczos for escaping well");
     fprintf(fp1, "num_lancz_vec_c   %20d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
     fprintf(fp1, "del_disp_lancz    %20g  # %s\n", del_disp_lancz, "Step of the numerical derivative of forces in Lanczos");
     fprintf(fp1, "eigen_th_lancz    %20g  # %s\n", eigen_th_lancz, "Eigenvalue threshold for Lanczos convergence");
-    fprintf(fp1, "\n");
-    fprintf(fp1, "force_th_saddle   %20g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
-    fprintf(fp1, "conv_perp_inc     %20d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
+    fprintf(fp1, "\n# New minimum and Metropolis\n");
     fprintf(fp1, "push_over_saddle  %20g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
-    fprintf(fp1, "eigen_th_fail     %20g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
-    fprintf(fp1, "max_perp_moves_c  %20d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
-    fprintf(fp1, "force_th_perp_sad %20g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
-    fprintf(fp1, "\n");
-    fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
-    fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
-    fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
-    fprintf(fp1, "max_ener_tol      %20g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
-    fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
     fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
-    fprintf(fp1, "\n");
+    fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
+    fprintf(fp1, "\n# Output related parameters");
     fprintf(fp1, "log_file          %20s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
     fprintf(fp1, "log_level         %20d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
     fprintf(fp1, "print_freq        %20d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
     fprintf(fp1, "event_list_file   %20s  # %s\n", fevent, "File to record the event info; NULL to skip");
-    fprintf(fp1, "init_config_id    %20d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "dump_min_config   %20s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
     fprintf(fp1, "dump_sad_config   %20s  # %s\n", fsad, "file for atomic dump of saddle configurations; NULL to skip");
     fprintf(fp1, "====================================================================================================\n");
@@ -1278,9 +1278,10 @@ void MinARTn::random_kick()
   if (abs(cluster_radius) < ZERO){ // only the cord atom will be kicked
     for (int i = 0; i<nlocal; ++i){
       if (tag[i] == that){
-        delpos[i*3]   = 0.5 - random->uniform();
-        delpos[i*3+1] = 0.5 - random->uniform();
-        delpos[i*3+2] = 0.5 - random->uniform();
+        int n = 3*i;
+        delpos[n++] = 0.5 - random->uniform();
+        delpos[n++] = 0.5 - random->uniform();
+        delpos[n++] = 0.5 - random->uniform();
 
         ++nhit; break;
       }
@@ -1289,9 +1290,10 @@ void MinARTn::random_kick()
   } else if (cluster_radius < 0.){ // all atoms in group will be kicked
     for (int i = 0; i < nlocal; ++i){
       if (groupbit & atom->mask[i]){
-        delpos[i*3]   = 0.5 - random->uniform();
-        delpos[i*3+1] = 0.5 - random->uniform();
-        delpos[i*3+2] = 0.5 - random->uniform();
+        int n = 3*i;
+        delpos[n++] = 0.5 - random->uniform();
+        delpos[n++] = 0.5 - random->uniform();
+        delpos[n++] = 0.5 - random->uniform();
 
         ++nhit;
       }
@@ -1316,9 +1318,10 @@ void MinARTn::random_kick()
         domain->minimum_image(dx, dy, dz);
         double r2 = dx*dx + dy*dy + dz*dz;
         if (r2 <= rcut2){
-          delpos[i*3]   = 0.5 - random->uniform();
-          delpos[i*3+1] = 0.5 - random->uniform();
-          delpos[i*3+2] = 0.5 - random->uniform();
+          int n = 3*i;
+          delpos[n++] = 0.5 - random->uniform();
+          delpos[n++] = 0.5 - random->uniform();
+          delpos[n++] = 0.5 - random->uniform();
 
           ++nhit;
         }
@@ -1327,13 +1330,12 @@ void MinARTn::random_kick()
   }
 
   // now normalize and apply the kick to the selected atom(s)
-  double norm = 0.;
+  double norm = 0., normall;
   for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
-  double normall;
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
 
   double norm_i = 1./sqrt(normall);
-  for (int i=0; i < nvec; ++i){
+  for (int i = 0; i < nvec; ++i){
     h[i] = delpos[i] * norm_i;
     xvec[i] += init_step_size * h[i];
   }
@@ -1784,14 +1786,14 @@ void MinARTn::print_info(const int flag)
 
   } else if (flag == 0){
     if (fp1){
-      fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(fp1, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
-      fprintf(fp1, "  - Temperature               : %lg\n", temperature);
+      if (log_level) fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(fp1, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
+      fprintf(fp1, "  - Temperature               : %.6f\n", temperature);
     }
     if (screen){
-      fprintf(screen, "  - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(screen, "  - Current (ref) energy (eV) : %lg\n", ecurrent);
-      fprintf(screen, "  - Temperature               : %lg\n", temperature);
+      if (log_level) fprintf(screen, "  - Minimizer stop condition  : %s\n",  stopstr);
+      fprintf(screen, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
+      fprintf(screen, "  - Temperature               : %.6f\n", temperature);
     }
 
   } else if (flag == 1){
@@ -1909,14 +1911,30 @@ void MinARTn::print_info(const int flag)
 
   } else if (flag == 15){
     if (fp1) {
-      fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(fp1, "    - Current   energy (eV)     : %lg\n", ecurrent);
-      fprintf(fp1, "    - Reference energy (eV)     : %lg\n", eref);
+      fprintf(fp1, "    - Current   energy (eV)     : %.6f\n", ecurrent);
+      fprintf(fp1, "    - Reference energy (eV)     : %.6f\n", eref);
+      if (log_level) fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
+      if (log_level) fprintf(fp1, "    - # of force evaluations    : %d\n", neval);
     }
     if (screen) {
-      fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
-      fprintf(screen, "    - Current   energy (eV)     : %lg\n", ecurrent);
-      fprintf(screen, "    - Reference energy (eV)     : %lg\n", eref);
+      fprintf(screen, "    - Current   energy (eV)     : %.6f\n", ecurrent);
+      fprintf(screen, "    - Reference energy (eV)     : %.6f\n", eref);
+      if (log_level) fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
+      if (log_level) fprintf(screen, "    - # of force evaluations    : %d\n", neval);
+    }
+
+  } else if (flag == 16){
+    if (fp1){
+      fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(fp1, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      if (log_level)fprintf(fp1, "      - Reference     energy (eV) : %.6f\n", eref);
+      if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
+    }
+    if (screen){
+      fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(screen, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      if (log_level) fprintf(screen, "      - Reference     energy (eV) : %.6f\n", eref);
+      if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
     }
   }
 return;
@@ -1977,19 +1995,19 @@ void MinARTn::sad_converge(int maxiter)
   // output minimization information
   if (me == 0 && fp1){
     fprintf(fp1, "    The new sad-%d is now converged as:\n", sad_id);
-    fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
-    fprintf(fp1, "      - Current energy  (eV)      : %lg\n", ecurrent);
-    fprintf(fp1, "      - Energy  barrier (eV)      : %lg\n", ecurrent-eref);
-    fprintf(fp1, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
-    fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
+    fprintf(fp1, "      - Current energy  (eV)      : %.6f\n", ecurrent);
+    fprintf(fp1, "      - Energy  barrier (eV)      : %.6f\n", ecurrent-eref);
+    if (log_level) fprintf(fp1, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
+    if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
+    if (log_level) fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
   }
   if (me == 0 && screen){
     fprintf(screen, "    The new sad-%d is now converged as:\n", sad_id);
-    fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
-    fprintf(screen, "      - Current energy  (eV)      : %lg\n", ecurrent);
-    fprintf(screen, "      - Energy  barrier (eV)      : %lg\n", ecurrent-eref);
-    fprintf(screen, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
-    fprintf(screen, "      - # of force evaluations    : %d\n", neval);
+    fprintf(screen, "      - Current energy  (eV)      : %.6f\n", ecurrent);
+    fprintf(screen, "      - Energy  barrier (eV)      : %.6f\n", ecurrent-eref);
+    if (log_level) fprintf(screen, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
+    if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
+    if (log_level) fprintf(screen, "      - # of force evaluations    : %d\n", neval);
   }
 
   lanczos(flag_egvec, 1, num_lancz_vec_c);
