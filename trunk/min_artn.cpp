@@ -168,7 +168,7 @@ int MinARTn::check_sad2min()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    //domain->minimum_image(dx,dy,dz);
+
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     dist2 += dx * dx + dy * dy + dz * dz;
 
@@ -203,14 +203,13 @@ int MinARTn::push_back_sad()
   ++stage;
   for (int i = 0; i < nvec; ++i) {
     x0tmp[i] = xvec[i];
-    // fperp store old eigenvector
-    fperp[i]  = h[i];
+    fperp[i] = h[i]; // fperp store old eigenvector
   }
 
   reset_x00();
   // check current center-of-mass
-  group->xcm(groupall, masstot, com);
   double dxcm[3];
+  group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
@@ -223,7 +222,7 @@ int MinARTn::push_back_sad()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    //domain->minimum_image(dx,dy,dz);
+
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
@@ -243,12 +242,13 @@ int MinARTn::push_back_sad()
   stop_condition = min_converge(max_conv_steps); evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
 
+  double Ediff_max = MIN(max_ener_tol, Ed);
   // output minimization information
   if (me == 0) print_info(15);
-  if ( fabs(ecurrent - eref) > max_ener_tol) {
+  if ( fabs(ecurrent - eref) > Ediff_max) {
     if (me == 0){
-      if (fp1) fprintf(fp1, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), max_ener_tol);
-      if (screen) fprintf(screen, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), max_ener_tol);
+      if (fp1) fprintf(fp1, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), Ediff_max);
+      if (screen) fprintf(screen, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, fabs(ecurrent - eref), Ediff_max);
     }
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
@@ -269,12 +269,10 @@ int MinARTn::push_back_sad()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    //domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
-    //domain->minimum_image(dx,dy,dz);
 
-    tmp = dx*dx + dy*dy + dz*dz;
-    dr += tmp; n += 3;
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    dr += dx*dx + dy*dy + dz*dz;
+    n += 3;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   drall = sqrt(drall);
@@ -329,7 +327,7 @@ void MinARTn::push_down()
     dx = xvec[n]   - x00[n];
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
-    //domain->minimum_image(dx,dy,dz);
+
     dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
@@ -393,10 +391,10 @@ void MinARTn::metropolis()
     dx = x[i][0] - x00[n];
     dy = x[i][1] - x00[n+1];
     dz = x[i][2] - x00[n+2];
-    //domain->minimum_image(dx,dy,dz);
-    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
 
+    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     tmp = dx*dx + dy*dy + dz*dz;
+
     if (tmp > disp_thr2) ++n_moved;
 
     dr += tmp; n += 3;
@@ -467,10 +465,10 @@ void MinARTn::set_defaults()
 
   // activation, harmonic well escape
   cluster_radius   = 5.0;
-  init_step_size   = 0.05;
-  basin_factor     = 2.1;
-  max_perp_move_h  = 10;
-  max_iter_basin   = 20;
+  init_step_size   = 0.1;
+  basin_factor     = 2.5;
+  max_perp_move_h  = 20;
+  max_iter_basin   = 30;
   min_num_ksteps   = 0;		
   increment_size   = 0.09;
   force_th_perp_h  = 0.5;
@@ -479,28 +477,28 @@ void MinARTn::set_defaults()
   // activation, converge to saddle
   max_activat_iter  = 100;
   use_fire          = 0;
-  force_th_saddle   = 0.1;
+  force_th_saddle   = 0.005;
   eigen_th_fail     = 0.1;
   conv_perp_inc     = 40;
   max_perp_moves_c  = 15;
-  force_th_perp_sad = 0.05;
+  force_th_perp_sad = 0.001;
 
   // confirmatom of new saddle
   disp_sad2min_thr = -1.;
   flag_push_back   = 0;
-  max_disp_tol     = 0.1;
-  max_ener_tol     = 0.1;
+  max_disp_tol     = 0.2;
+  max_ener_tol     = 0.001;
   flag_relax_sad   = 0;
 
   // convergence to new minimum
-  push_over_saddle = 0.3;
-  atom_disp_thr    = 0.1;
-  temperature      = -0.5;
+  push_over_saddle = 0.2;
+  atom_disp_thr    = 0.2;
+  temperature      = 0.1;
 
   // for lanczos
   num_lancz_vec_h  = 30;
   num_lancz_vec_c  = 20;
-  del_disp_lancz   = 0.01;
+  del_disp_lancz   = 0.001;
   eigen_th_lancz   = 0.01;
 
   // output
@@ -770,6 +768,7 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# confirmation of new found saddle\n");
     fprintf(fp1, "disp_sad2min_thr  %20g  # %s\n", disp_sad2min_thr, "Minimum distance between saddle and original minimum");
     fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
+    fprintf(fp1, "push_over_saddle  %20g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
     fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "max_ener_tol      %20g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
@@ -778,10 +777,9 @@ void MinARTn::read_control()
     fprintf(fp1, "num_lancz_vec_c   %20d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
     fprintf(fp1, "del_disp_lancz    %20g  # %s\n", del_disp_lancz, "Step of the numerical derivative of forces in Lanczos");
     fprintf(fp1, "eigen_th_lancz    %20g  # %s\n", eigen_th_lancz, "Eigenvalue threshold for Lanczos convergence");
-    fprintf(fp1, "\n# New minimum and Metropolis\n");
-    fprintf(fp1, "push_over_saddle  %20g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
-    fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
+    fprintf(fp1, "\n# Metropolis\n");
     fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
+    fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
     fprintf(fp1, "\n# Output related parameters\n");
     fprintf(fp1, "log_file          %20s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
     fprintf(fp1, "log_level         %20d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
@@ -990,23 +988,24 @@ int MinARTn::find_saddle( )
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     
+    Ed = ecurrent-eref;
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(ftotall);
       delr   = sqrt(delr);
       if (fp1 && log_level && it%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %5d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-      ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       if (screen && it%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-      ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
     }
     
     if (it > min_num_ksteps && egval < eigen_th_well){
       idum = it;
       if (me == 0){
         if (fp1 && log_level && it%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-        ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+        Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
         if (screen && it%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-        ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+        Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       
         print_info(4);
       }
@@ -1020,12 +1019,13 @@ int MinARTn::find_saddle( )
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
+  Ed = ecurrent-eref;
   if (flag == 0){
     if (me == 0){
       if (fp1 && log_level && (max_iter_basin-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
-      ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       if (screen && (max_iter_basin-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
-      ecurrent-eref, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
 
       print_info(5);
     }
@@ -1127,20 +1127,21 @@ int MinARTn::find_saddle( )
     }
     MPI_Reduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,0,world);
   
+    Ed = ecurrent - eref;
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+      it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
       if (screen && it_s%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-      it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+      it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
     }
    
     if (egval > eigen_th_fail){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         print_info(7);
       }
@@ -1154,9 +1155,9 @@ int MinARTn::find_saddle( )
     if (delr < disp_sad2min_thr){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         ddum = delr;
         print_info(-7);
@@ -1171,9 +1172,9 @@ int MinARTn::find_saddle( )
     if (ftotall < force_th_saddle){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
         idum = it_s;
         print_info(8);
@@ -1184,6 +1185,12 @@ int MinARTn::find_saddle( )
   
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
+    tmpsum = tmpsumall = 0.;
+    for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
+    MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
+    if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
+    else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
+
 #define MinEGV 0.1 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
@@ -1192,11 +1199,12 @@ int MinARTn::find_saddle( )
     artn_reset_vec();
   }
 
+  Ed = ecurrent - eref;
   if (me == 0){
     if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    (max_activat_iter-1), Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
     if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), ecurrent - eref, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    (max_activat_iter-1), Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
     print_info(9);
   }
