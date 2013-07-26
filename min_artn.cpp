@@ -209,10 +209,12 @@ int MinARTn::push_back_sad()
   //reset_x00();
   // check current center-of-mass
   double dxcm[3];
+/*
   group->xcm(groupall, masstot, com);
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
+*/
 
   // push back the saddle point along the eigenvector direction
   double hdotxx0 = 0., hdotxx0all;
@@ -223,7 +225,7 @@ int MinARTn::push_back_sad()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
 
-    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -243,7 +245,7 @@ int MinARTn::push_back_sad()
   stopstr = stopstrings(stop_condition); artn_reset_vec();
   reset_coords();
 
-  double Ediff_max = MIN(max_ener_tol, Ed);
+  double Ediff_max = MIN(max_ener_tol, delE);
   // output minimization information
   if (me == 0) print_info(15);
   if ( fabs(ecurrent - eref) > Ediff_max) {
@@ -311,11 +313,13 @@ void MinARTn::push_down()
 {
   reset_x00();
   // check current center-of-mass
+/*
   group->xcm(groupall, masstot, com);
   double dxcm[3];
   dxcm[0] = com[0] - com0[0];
   dxcm[1] = com[1] - com0[1];
   dxcm[2] = com[2] - com0[2];
+*/
 
   // push over the saddle point along the egvec direction
   double hdotxx0 = 0., hdotxx0all;
@@ -326,7 +330,7 @@ void MinARTn::push_down()
     dy = xvec[n+1] - x00[n+1];
     dz = xvec[n+2] - x00[n+2];
 
-    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
+    //dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     hdotxx0 += h[n] * dx + h[n+1] * dy + h[n+2] * dz;
 
     n += 3;
@@ -982,24 +986,24 @@ int MinARTn::find_saddle( )
     for (int i = 0; i < nvec; ++i) fpar2 += fvec[i] * h[i];
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     
-    Ed = ecurrent-eref;
+    delE = ecurrent-eref;
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(ftotall);
       delr   = sqrt(delr);
       if (fp1 && log_level && it%print_freq == 0) fprintf(fp1, "%8d %10.5f %3d %5d %3d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       if (screen && it%print_freq == 0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
     }
     
     if (it > min_num_ksteps && egval < eigen_th_well){
       idum = it;
       if (me == 0){
         if (fp1 && log_level && it%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-        Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+        delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
         if (screen && it%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
-        Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+        delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       
         print_info(4);
       }
@@ -1013,13 +1017,13 @@ int MinARTn::find_saddle( )
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
-  Ed = ecurrent-eref;
+  delE = ecurrent-eref;
   if (flag == 0){
     if (me == 0){
       if (fp1 && log_level && (max_iter_basin-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
-      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       if (screen && (max_iter_basin-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
-      Ed, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
+      delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
 
       print_info(5);
     }
@@ -1120,21 +1124,21 @@ int MinARTn::find_saddle( )
     }
     MPI_Reduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,0,world);
   
-    Ed = ecurrent - eref;
+    delE = ecurrent - eref;
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-      it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+      it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
       if (screen && it_s%print_freq==0) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-      it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+      it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
     }
    
     if (egval > eigen_th_fail){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         print_info(7);
       }
@@ -1148,9 +1152,9 @@ int MinARTn::find_saddle( )
     if (delr < disp_sad2min_thr){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         ddum = delr;
         print_info(-7);
@@ -1165,9 +1169,9 @@ int MinARTn::find_saddle( )
     if (ftotall < force_th_saddle){
       if (me == 0){
         if (fp1 && log_level && it_s%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-        it_s, Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+        it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
         idum = it_s;
         print_info(8);
@@ -1194,12 +1198,12 @@ int MinARTn::find_saddle( )
     artn_reset_vec(); reset_x00();
   }
 
-  Ed = ecurrent - eref;
+  delE = ecurrent - eref;
   if (me == 0){
     if (fp1 && log_level && (max_activat_iter-1)%print_freq) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    (max_activat_iter-1), delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
     if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
-    (max_activat_iter-1), Ed, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
+    (max_activat_iter-1), delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
     print_info(9);
   }

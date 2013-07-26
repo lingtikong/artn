@@ -52,7 +52,7 @@ private:
   bigint evalf;
   bool flag_egvec;
 
-  double eref, Ed;
+  double eref, delE;
 
   double egval;
   double *egvec;
