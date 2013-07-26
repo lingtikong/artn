@@ -103,6 +103,7 @@ private:
 
   // for convergence
   double force_th_saddle;  // Threshold for convergence at saddle point
+  double disp_sad2min_thr; // minimum distance between saddle and original min
   double push_over_saddle; // Fraction of displacement over the saddle
   double eigen_th_fail;    // the eigen cutoff for failing in searching saddle point
   int    max_perp_moves_c; // Maximum number of perpendicular steps approaching saddle point
