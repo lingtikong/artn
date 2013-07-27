@@ -152,7 +152,9 @@ return MAXITER;
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::check_sad2min()
 {
+  lanczos(flag_egvec, 1, num_lancz_vec_c);
   reset_x00();
+
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
   double dxcm[3];
@@ -162,28 +164,31 @@ int MinARTn::check_sad2min()
 
   // check the distance between new saddle and original min
   // fperp now stores the displacement vector, will be used by push_back and push_down
-  double dist2 = 0., dist2all;
+  double tmp_me[2], tmp_all[2];
+  tmp_me[0] = tmp_me[1] = 0.;
+
   for (int i = 0; i < nvec; ++i){
-    fperp[i] = xvec[i] - x00[i] - dxcm[i%3];
-    dist2 += fperp[i] * fperp[i];
+    double dx = xvec[i] - x00[i] - dxcm[i%3];
+    tmp_me[0] += dx * dx;
+    tmp_me[1] += dx * egvec[i];
   }
-  MPI_Allreduce(&dist2, &dist2all,1,MPI_DOUBLE,MPI_SUM,world);
-  dist2all = sqrt(dist2all);
+  MPI_Allreduce(tmp_me, tmp_all, 2, MPI_DOUBLE, MPI_SUM, world);
+  double dist = sqrt(tmp_all[0]);
 
   int status = 0;
-  if (dist2all >= disp_sad2min_thr){
+  if (dist >= disp_sad2min_thr){
 
-    double norm_inv = 1./dist2all;
-    for (int i = 0; i < nvec; ++i) fperp[i] *= norm_inv;
+    if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i];
+    else for (int i = 0; i < nvec; ++i) fperp[i] = -egvec[i];
 
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist2all, disp_sad2min_thr);
-      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist2all, disp_sad2min_thr);
+      if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist, disp_sad2min_thr);
+      if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist, disp_sad2min_thr);
     }
   } else {
     if (me == 0){
-      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist2all, disp_sad2min_thr);
-      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist2all, disp_sad2min_thr);
+      if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist, disp_sad2min_thr);
+      if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist, disp_sad2min_thr);
     }
 
     status = 1;
@@ -316,16 +321,14 @@ void MinARTn::metropolis()
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
   int n_moved = 0, n_movedall, n = 0;
   for (int i = 0; i < atom->nlocal; ++i) {
-    dx = x[i][0] - x00[n];
-    dy = x[i][1] - x00[n+1];
-    dz = x[i][2] - x00[n+2];
+    dx = x[i][0] - x00[n]   - dxcm[0];
+    dy = x[i][1] - x00[n+1] - dxcm[1];
+    dz = x[i][2] - x00[n+2] - dxcm[2];
 
-    dx -= dxcm[0]; dy -= dxcm[1]; dz -= dxcm[2];
     tmp = dx*dx + dy*dy + dz*dz;
+    dr += tmp; n += 3;
 
     if (tmp > disp_thr2) ++n_moved;
-
-    dr += tmp; n += 3;
   }
   disp_me[0] = dr; disp_me[1] = double(n_moved);
   MPI_Reduce(disp_me, disp_all, 2, MPI_DOUBLE, MPI_SUM, 0, world);
@@ -940,8 +943,8 @@ int MinARTn::find_saddle( )
     }
     
     // push along the search direction
-    step = basin_factor * increment_size; // * MAX(-0.1, MIN(2., -fpar2all));
-    for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i]; //(fvec[i] - (fpar2all + fpar2all)*h[i]);
+    step = basin_factor * increment_size;
+    for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
   }
 
   delE = ecurrent-eref;
@@ -1109,14 +1112,6 @@ int MinARTn::find_saddle( )
   
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
-/*
-    tmpsum = tmpsumall = 0.;
-    for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
-    MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
-    if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
-    else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
-*/
-
 #define MinEGV 0.1 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
