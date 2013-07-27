@@ -28,12 +28,16 @@
 using namespace LAMMPS_NS;
 
 /* -------------------------------------------------------------------------------------------------
- * clapack is used to evaluate the lowest eigenvalue of the matrix in Lanczos.
+ * lapack or MKL-lapack is used to evaluate the lowest eigenvalue of the matrix in Lanczos.
 ------------------------------------------------------------------------------------------------- */
+#ifdef MKL
+#include "mkl.h"
+#define dstev_  dstev
+#else
 extern "C" {
-#include "f2c.h"
-#include "clapack.h"
-}
+extern void dstev_(char *, int*, double *, double *, double *, int *, double *, int *);
+};
+#endif
 
 #define EPS_ENERGY 1.e-8
 
@@ -1219,7 +1223,7 @@ void MinARTn::random_kick()
   int *tag   = atom->tag;
   int nhit = 0;
 
-  if (abs(cluster_radius) < ZERO){ // only the cord atom will be kicked
+  if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
     for (int i = 0; i<nlocal; ++i){
       if (tag[i] == that){
         int n = 3*i;
@@ -1430,7 +1434,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
   double eigen1 = 0., eigen2 = 0.;
   char jobs = 'V';
   double *work, *z;
-  long ldz = maxvec, info;
+  int ldz = maxvec, info;
   z = new double [ldz*maxvec];
   work = new double [2*maxvec];
 
@@ -1439,7 +1443,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     x0tmp[i] = xvec[i];
     f0[i] = fvec[i];
   }
-  long n;
+  int n;
   for (n = 1; n <= maxvec; ++n){
     for (int i = 0; i < nvec; ++i){
       q_k[i] = r_k_1[i] / beta_k_1;
@@ -1581,7 +1585,7 @@ int MinARTn::min_perp_fire(int maxiter)
   double fdoth, fdothall;
   double scale1, scale2;
   double alpha;
-  int last_negative = 0.;
+  int last_negative = 0;
 
   double force_thr2 = force_th_perp_sad*force_th_perp_sad;
 
