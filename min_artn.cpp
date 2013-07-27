@@ -126,7 +126,7 @@ int MinARTn::iterate(int maxevent)
     if (flag_relax_sad) sad_converge(max_conv_steps);
 
     ++ievent; ++stage;
-    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f %7.3f", ievent, ecurrent - eref, egval);
+    if (me == 0 && fp2) fprintf(fp2, "%5d %9.6f %7.3f", ievent, delE, egval);
 
     if (dumpsad){
       int idum = update->ntimestep;
@@ -178,8 +178,8 @@ int MinARTn::check_sad2min()
   int status = 0;
   if (dist >= disp_sad2min_thr){
 
-    if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i];
-    else for (int i = 0; i < nvec; ++i) fperp[i] = -egvec[i];
+    if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i] * push_over_saddle;
+    else for (int i = 0; i < nvec; ++i) fperp[i] = -egvec[i] * push_over_saddle;
 
     if (me == 0){
       if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, dist, disp_sad2min_thr);
@@ -205,8 +205,8 @@ int MinARTn::push_back_sad()
   ++stage;
   for (int i = 0; i < nvec; ++i) x0tmp[i] = xvec[i];  // x0tmp stores the saddle position
 
-  // push back the saddle
-  for (int i = 0; i < nvec; ++i) xvec[i] -= fperp[i] * push_over_saddle;
+  // push back the saddle; fperp carries the direction vector, set by check_sad2min
+  for (int i = 0; i < nvec; ++i) xvec[i] -= fperp[i];
 
   if (me == 0) print_info(11);
 
@@ -270,8 +270,8 @@ return 0;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::push_down()
 {
-  // push down the saddle
-  for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i] * push_over_saddle;
+  // push down the saddle; fperp carries the direction vector, set by check_sad2min
+  for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i];
 
   ecurrent = energy_force(1); ++evalf;
   if (me == 0) print_info(12);
@@ -864,7 +864,7 @@ int MinARTn::find_saddle( )
     artn_reset_vec(); reset_x00();
 
     m_perp = nfail = trial = 0;
-    step = increment_size;
+    step = increment_size * 0.5;
     while ( 1 ){
       preenergy = ecurrent;
       fdoth = 0.;
@@ -893,7 +893,7 @@ int MinARTn::find_saddle( )
 
       } else {
         for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
-        step *= 0.6; ++nfail;
+        step *= 0.5; ++nfail;
         ecurrent = energy_force(1); ++evalf;
         artn_reset_vec(); reset_x00();
       }
@@ -964,10 +964,8 @@ int MinARTn::find_saddle( )
   }
 
   flag = 0; ++stage;
-
   if (me == 0) print_info(6);
-
-  double hdot , hdotall, tmpsum, tmpsumall;
+  double hdot, hdotall;
 
   // now try to move close to the saddle point according to the egvec.
   int inc = 0;
@@ -978,16 +976,9 @@ int MinARTn::find_saddle( )
 
     // caculate egvec use lanczos
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
+    for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
 
-    // set search direction according to egvec
-    hdot = hdotall = tmpsum = tmpsumall = 0.;
-    for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
-    MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
-
-    if (tmpsumall > 0.) for (int i = 0; i < nvec; ++i) h[i] = -egvec[i];
-    else for (int i = 0; i < nvec; ++i) h[i] = egvec[i];
-
-
+    hdot = hdotall = 0.;
     for(int i = 0; i <nvec; ++i) hdot += h[i] * g[i];
     MPI_Reduce(&hdot,&hdotall,1,MPI_DOUBLE,MPI_SUM,0,world);
 
@@ -1111,11 +1102,19 @@ int MinARTn::find_saddle( )
     }
   
     // caculate egvec use lanczos
+    double sign = 1.;
     nlanc = lanczos(flag_egvec, 1, num_lancz_vec_c);
-#define MinEGV 0.1 // was 0.5
+
+    double tmpsum = 0., tmpsumall;
+    for (int i =0; i < nvec; ++i) tmpsum += egvec[i] * fvec[i];
+    MPI_Allreduce(&tmpsum,&tmpsumall,1,MPI_DOUBLE,MPI_SUM,world);
+
+    if (tmpsumall > 0.) sign = -1.;
+
+#define MinEGV 0.5 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
-    double factor = MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
-    for (int i = 0; i < nvec; ++i) xvec[i] += factor * h[i];
+    double factor = sign * MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
+    for (int i = 0; i < nvec; ++i) xvec[i] += factor * egvec[i];
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec(); reset_x00();
   }
@@ -1697,9 +1696,9 @@ void MinARTn::artn_final()
       fprintf(screen, "\n");
       fprintf(screen, "#=========================================================================================\n");
       fprintf(screen, "# Total number of ARTn attempts : %d\n", nattempt);
-      fprintf(screen, "# Number of new found saddle    : %d (%4.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
-      fprintf(screen, "# Number of accepted new saddle : %d (%4.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
-      fprintf(screen, "# Overall mission success rate  : %4.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
+      fprintf(screen, "# Number of new found saddle    : %d (%.1f%% success)\n", sad_found, double(sad_found)/double(MAX(1,nattempt))*100.);
+      fprintf(screen, "# Number of accepted new saddle : %d (%.1f%% acceptance)\n", sad_id, double(sad_id)/double(MAX(1,sad_found))*100.);
+      fprintf(screen, "# Overall mission success rate  : %.1f%%\n", double(sad_id)/double(MAX(1,nattempt))*100.);
       fprintf(screen, "# Number of new minimumi found  : %d\n", min_id-ref_0);
       fprintf(screen, "# Number of accepted minima     : %d (%g%% acceptance)\n", ref_id-ref_0, double(ref_id-ref_0)/double(MAX(1,min_id-ref_0))*100.);
       fprintf(screen, "# Number of force evaluation    : " BIGINT_FORMAT "\n", evalf);
@@ -1948,12 +1947,13 @@ void MinARTn::sad_converge(int maxiter)
   evalf += neval;
   stopstr = stopstrings(stop_condition);
 
+  delE = ecurrent-eref;
   double fdotf = fnorm_sqr();
   // output minimization information
   if (me == 0 && fp1){
     fprintf(fp1, "    The new sad-%d is now converged as:\n", sad_id);
     fprintf(fp1, "      - Current energy  (eV)      : %.6f\n", ecurrent);
-    fprintf(fp1, "      - Energy  barrier (eV)      : %.6f\n", ecurrent-eref);
+    fprintf(fp1, "      - Energy  barrier (eV)      : %.6f\n", delE);
     if (log_level) fprintf(fp1, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
     if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
     if (log_level) fprintf(fp1, "      - # of force evaluations    : %d\n", neval);
@@ -1961,7 +1961,7 @@ void MinARTn::sad_converge(int maxiter)
   if (me == 0 && screen){
     fprintf(screen, "    The new sad-%d is now converged as:\n", sad_id);
     fprintf(screen, "      - Current energy  (eV)      : %.6f\n", ecurrent);
-    fprintf(screen, "      - Energy  barrier (eV)      : %.6f\n", ecurrent-eref);
+    fprintf(screen, "      - Energy  barrier (eV)      : %.6f\n", delE);
     if (log_level) fprintf(screen, "      - Norm2  of total force     : %lg\n", sqrt(fdotf));
     if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
     if (log_level) fprintf(screen, "      - # of force evaluations    : %d\n", neval);
