@@ -157,8 +157,8 @@ return MAXITER;
 int MinARTn::check_sad2min()
 {
   lanczos(flag_egvec, 1, num_lancz_vec_c);
-  reset_x00();
 
+  reset_x00();
   // check current center-of-mass
   group->xcm(groupall, masstot, com);
   double dxcm[3];
@@ -195,6 +195,8 @@ int MinARTn::check_sad2min()
       if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, dist, disp_sad2min_thr);
     }
 
+    
+    for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     status = 1;
   }
 
@@ -868,7 +870,7 @@ int MinARTn::find_saddle( )
     artn_reset_vec(); reset_x00();
 
     m_perp = nfail = trial = 0;
-    step = increment_size * 0.5;
+    step = increment_size * 0.4;
     while ( 1 ){
       preenergy = ecurrent;
       fdoth = 0.;
@@ -945,7 +947,7 @@ int MinARTn::find_saddle( )
       flag = 1;
       break;
     }
-    
+
     // push along the search direction
     step = basin_factor * increment_size;
     for(int i = 0; i < nvec; ++i) xvec[i] += step * h[i];
@@ -991,7 +993,7 @@ int MinARTn::find_saddle( )
       m_perp = trial = min_perp_fire(it_s + max_perp_moves_c + inc);
     } else {
       m_perp = trial = nfail = 0;
-      step = increment_size * 0.4;
+      step = increment_size * 0.25;
       int max_perp = max_perp_moves_c + it_s + inc;
       while ( 1 ){
         preenergy = ecurrent;
