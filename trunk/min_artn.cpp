@@ -85,13 +85,13 @@ int MinARTn::iterate(int maxevent)
   max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
-  if (me == 0) print_info(-1);
+  if (me == 0) print_info(0);
 
   stop_condition = min_converge(max_conv_steps,0); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
-  if (me == 0) print_info(0);
+  if (me == 0) print_info(1);
   if (flag_press){
     pressure->compute_vector();
     double * press = pressure->vector;
@@ -112,8 +112,8 @@ int MinARTn::iterate(int maxevent)
 
   // print header of event log file
   if (me == 0 && fp2){
-    if (flag_press) print_info(1);
-    else print_info(2);
+    if (flag_press) print_info(2);
+    else print_info(3);
   }
 
   // main loop of ARTn
@@ -183,13 +183,13 @@ int MinARTn::check_sad2min()
 
   int status = 0;
   if (ddum >= disp_sad2min_thr){
-    if (me == 0) print_info(17);
+    if (me == 0) print_info(20);
 
     if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i] * push_over_saddle;
     else for (int i = 0; i < nvec; ++i) fperp[i] = -egvec[i] * push_over_saddle;
 
   } else {
-    if (me == 0) print_info(18);
+    if (me == 0) print_info(21);
     
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     status = 1;
@@ -209,7 +209,7 @@ int MinARTn::push_back_sad()
   // push back the saddle; fperp carries the direction vector, set by check_sad2min
   for (int i = 0; i < nvec; ++i) xvec[i] -= fperp[i];
 
-  if (me == 0) print_info(11);
+  if (me == 0) print_info(30);
 
   // minimization using CG
   stop_condition = min_converge(max_conv_steps,2); evalf += neval;
@@ -217,11 +217,11 @@ int MinARTn::push_back_sad()
   reset_coords();
 
   // output minimization information
-  if (me == 0) print_info(15);
+  if (me == 0) print_info(31);
   ddum = fabs(ecurrent - eref);
 
   if (ddum > max_ener_tol) {
-    if (me == 0) print_info(19);
+    if (me == 0) print_info(32);
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     return 0;
@@ -243,14 +243,14 @@ int MinARTn::push_back_sad()
   ddum = sqrt(drall);
 
   if (ddum < max_disp_tol) {
-    if (me == 0) print_info(20);
+    if (me == 0) print_info(33);
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
     return 1;
 
   } else {
 
-    if (me == 0) print_info(21);
+    if (me == 0) print_info(34);
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
   }
 
@@ -266,7 +266,7 @@ void MinARTn::push_down()
   for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i];
 
   ecurrent = energy_force(1); ++evalf;
-  if (me == 0) print_info(12);
+  if (me == 0) print_info(50);
 
   // minimization using CG
   stop_condition = min_converge(max_conv_steps,1); evalf += neval;
@@ -274,7 +274,7 @@ void MinARTn::push_down()
   artn_reset_vec();
 
   // output minimization information
-  if (me == 0) print_info(16);
+  if (me == 0) print_info(51);
 
   // store min configuration
   ++min_id;
@@ -345,18 +345,18 @@ void MinARTn::metropolis()
   int acc = 0;
   if (me == 0){
     ddum = sqrt(drall);
-    print_info(22);
+    print_info(60);
 
     if (temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature))) acc = 1;
   }
   MPI_Bcast(&acc, 1, MPI_INT, 0, world);
 
   if (acc){
-    if (me == 0) print_info(13);
+    if (me == 0) print_info(61);
     ref_id = min_id; eref = ecurrent;
 
   } else {
-    if (me == 0) print_info(14);
+    if (me == 0) print_info(62);
 
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
     ecurrent = energy_force(1); ++evalf;
@@ -844,7 +844,7 @@ int MinARTn::find_saddle( )
   // randomly displace the desired atoms: activation
   random_kick();
 
-  if (me == 0) print_info(3);
+  if (me == 0) print_info(10);
 
   int nmax_perp = max_perp_move_h;
 
@@ -926,7 +926,7 @@ int MinARTn::find_saddle( )
         if (screen && it%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", it,
         delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
       
-        print_info(4);
+        print_info(11);
       }
 
       flag = 1;
@@ -946,7 +946,7 @@ int MinARTn::find_saddle( )
       if (screen && (max_iter_basin-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %10.5f %10.5f " BIGINT_FORMAT "\n", (max_iter_basin-1),
       delE, m_perp, trial, nlanc, ftot, fpar2all, fperp2, egval, delr, evalf);
 
-      print_info(5);
+      print_info(12);
     }
     reset_x00();
     for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
@@ -955,7 +955,7 @@ int MinARTn::find_saddle( )
   }
 
   flag = 0; ++stage;
-  if (me == 0) print_info(6);
+  if (me == 0) print_info(13);
   double hdot, hdotall;
 
   // now try to move close to the saddle point according to the egvec.
@@ -1052,7 +1052,7 @@ int MinARTn::find_saddle( )
         if (screen && it_s%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
         it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
-        print_info(7);
+        print_info(14);
       }
 
       reset_x00();
@@ -1069,7 +1069,7 @@ int MinARTn::find_saddle( )
         it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
  
         ddum = delr;
-        print_info(-7);
+        print_info(15);
       }
 
       reset_x00();
@@ -1086,7 +1086,7 @@ int MinARTn::find_saddle( )
         it_s, delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
         idum = it_s;
-        print_info(8);
+        print_info(16);
       }
 
       return 1;
@@ -1117,7 +1117,7 @@ int MinARTn::find_saddle( )
     if (screen && (max_activat_iter-1)%print_freq) fprintf(screen, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
     (max_activat_iter-1), delE, m_perp, trial, nlanc, ftotall, fpar2all, fperp2, egval, delr, hdotall, evalf);
 
-    print_info(9);
+    print_info(17);
   }
 
   reset_x00();
@@ -1197,7 +1197,7 @@ void MinARTn::random_kick()
     int index = int(random->uniform()*double(ngroup+1))%ngroup;
     that = glist[index];
 
-    print_info(23);
+    print_info(18);
   }
   MPI_Bcast(&that, 1, MPI_INT, 0, world);
 
@@ -1275,7 +1275,7 @@ void MinARTn::random_kick()
   }
 
   MPI_Reduce(&nhit,&idum,1,MPI_INT,MPI_SUM,0,world);
-  if (me == 0) print_info(24);
+  if (me == 0) print_info(19);
 
 return;
 }
@@ -1711,11 +1711,11 @@ return;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::print_info(const int flag)
 {
-  if (flag == -1){
+  if (flag == 0){
     if (fp1) fprintf(fp1, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
     if (screen) fprintf(screen, "\nMinimizing the initial configuration, id = %d ....\n", ref_id);
 
-  } else if (flag == 0){
+  } else if (flag == 1){
     if (fp1){
       if (log_level) fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
       fprintf(fp1, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
@@ -1727,17 +1727,17 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  - Temperature   (eV)        : %.6f\n", temperature);
     }
 
-  } else if (flag == 1){
+  } else if (flag == 2){
       fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10      11         12         13         14         15          16       17       18     19        20        21        22\n");
       fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove    pxx        pyy        pzz        pxy        pxz         pyz     Efinal   status disp-x    disp-y    disp-z     dr\n");
       fprintf(fp2, "#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
-  } else if (flag == 2){
+  } else if (flag == 3){
       fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10     11         12     13       14        15     16\n");
       fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove  Efinal    status disp-x   disp-y    disp-z   dr\n");
       fprintf(fp2, "#---------------------------------------------------------------------------------------------------------------------------------\n");
 
-  } else if (flag == 3){
+  } else if (flag == 10){
     if (fp1){
       fprintf(fp1, "  Stage %d, search for the saddle from configuration %d\n", stage, ref_id);
       if (log_level){
@@ -1754,7 +1754,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
     }
 
-  } else if (flag == 4){
+  } else if (flag == 11){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d succeeded after %d iterations, continue searching based on eigen-vector.\n", stage, idum);
@@ -1764,7 +1764,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d succeeded after %d iterations, continue searching based on eigen-vector.\n", stage, idum);
     }
 
-  } else if (flag == 5){
+  } else if (flag == 12){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
@@ -1774,7 +1774,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d failed, cannot get out of the harmonic well after %d steps.\n\n", stage, max_iter_basin);
     }
 
-  } else if (flag == 6){
+  } else if (flag == 13){
     if (fp1){
       fprintf(fp1, "  Stage %d, converge to the saddle by using Lanczos\n", stage);
       if (log_level){
@@ -1790,7 +1790,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  ----------------------------------------------------------------------------------------------------\n");
     }
 
-  } else if (flag == 7){
+  } else if (flag == 14){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, egval, eigen_th_fail);
@@ -1800,7 +1800,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d failed, the smallest eigen value is %g > %g\n", stage, egval, eigen_th_fail);
     }
 
-  } else if (flag == -7){
+  } else if (flag == 15){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d failed, the distance to min-%d is %g < %g\n", stage, ref_id, ddum, disp_sad2min_thr);
@@ -1810,7 +1810,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d failed, the distance to min-%d is %g < %g\n", stage, ref_id, ddum, disp_sad2min_thr);
     }
 
-  } else if (flag == 8){
+  } else if (flag == 16){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d converged at a new saddle after %d iterations, dE = %g\n", stage, idum, ecurrent-eref);
@@ -1820,7 +1820,7 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d converged at a new saddle after %d iterations, dE = %g\n", stage, idum, ecurrent-eref);
     }
 
-  } else if (flag == 9){
+  } else if (flag == 17){
     if (fp1){
       if (log_level) fprintf(fp1, "  ----------------------------------------------------------------------------------------------------\n");
       fprintf(fp1, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
@@ -1830,27 +1830,27 @@ void MinARTn::print_info(const int flag)
       fprintf(screen, "  Stage %d failed, the max Lanczos steps %d reached.\n", stage, max_activat_iter);
     }
 
-  } else if (flag == 10){
-    if (fp1) fprintf(fp1, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
-    if (screen) fprintf(screen, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
+  } else if (flag == 18){
+    if (fp1) fprintf(fp1, "\nAttempt %d, new activation centered on atom %d", nattempt, that);
+    if (screen) fprintf(screen, "\nAttempt %d, new activation centered on atom %d", nattempt, that);
 
-  } else if (flag == 11){
+  } else if (flag == 19){
+    if (fp1) fprintf(fp1, " with total %d atoms. %d success till now.\n", idum, sad_id);
+    if (screen) fprintf(screen, " with total %d atoms. %d success till now.\n", idum, sad_id);
+
+  } else if (flag == 20){
+    if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, ddum, disp_sad2min_thr);
+    if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, ddum, disp_sad2min_thr);
+
+  } else if (flag == 21){
+    if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, ddum, disp_sad2min_thr);
+    if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, ddum, disp_sad2min_thr);
+
+  } else if (flag == 30){
     if (fp1) fprintf(fp1, "  Stage %d, push back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
     if (screen) fprintf(screen, "  Stage %d, push back the saddle to confirm if it is linked with min-%d\n", stage, ref_id);
 
-  } else if (flag == 12){
-    if (fp1) fprintf(fp1, "  Stage %d, push over the new saddle, Enew: %g; Eref= %g. Relaxing...\n", stage, ecurrent, eref);
-    if (screen) fprintf(screen, "  Stage %d, push over the new saddle, Enew: %g; Eref= %g. Relaxing...\n", stage, ecurrent, eref);
-
-  } else if (flag == 13){
-    if (fp1) fprintf(fp1, "  Stage %d done, the new min (E= %g) of ID  %d is accepted by Metropolis.\n", stage, ecurrent, min_id);
-    if (screen) fprintf(screen, "  Stage %d done, the new min (E= %g) of ID %d is accepted by Metropolis.\n", stage, ecurrent, min_id);
-
-  } else if (flag == 14){
-    if (fp1) fprintf(fp1, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
-    if (screen) fprintf(screen, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
-
-  } else if (flag == 15){
+  } else if (flag == 31){
     if (fp1) {
       fprintf(fp1, "    - Current   energy (eV)     : %.6f\n", ecurrent);
       fprintf(fp1, "    - Reference energy (eV)     : %.6f\n", eref);
@@ -1864,53 +1864,23 @@ void MinARTn::print_info(const int flag)
       if (log_level) fprintf(screen, "    - # of force evaluations    : %d\n", neval);
     }
 
-  } else if (flag == 16){
-    if (fp1){
-      fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(fp1, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
-      if (log_level)fprintf(fp1, "      - Reference     energy (eV) : %.6f\n", eref);
-      if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
-    }
-    if (screen){
-      fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(screen, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
-      if (log_level) fprintf(screen, "      - Reference     energy (eV) : %.6f\n", eref);
-      if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
-    }
-
-  } else if (flag == 17){
-    if (fp1) fprintf(fp1, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, ddum, disp_sad2min_thr);
-    if (screen) fprintf(screen, "    The distance between new found saddle and min-%d is %g, > %g, acceptable.\n", ref_id, ddum, disp_sad2min_thr);
-
-  } else if (flag == 18){
-    if (fp1) fprintf(fp1, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, ddum, disp_sad2min_thr);
-    if (screen) fprintf(screen, "    The distance between new saddle and min-%d is %g, < %g, rejected.\n", ref_id, ddum, disp_sad2min_thr);
-
-  } else if (flag == 19){
+  } else if (flag == 32){
     if (fp1) fprintf(fp1, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, ddum, max_ener_tol);
     if (screen) fprintf(screen, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, ddum, max_ener_tol);
 
-  } else if (flag == 20){
+  } else if (flag == 33){
     if (fp1) fprintf(fp1, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, ddum, max_disp_tol);
     if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, ddum, max_disp_tol);
 
-  } else if (flag == 21){
+  } else if (flag == 34){
     if (fp1) fprintf(fp1, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, ddum, max_disp_tol);
     if (screen) fprintf(screen, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, ddum, max_disp_tol);
 
-  } else if (flag == 22){
-    if (fp1 && log_level) fprintf(fp1, "      - Distance to min-%8.8d  : %g\n", ref_id, ddum);
-    if (screen && log_level) fprintf(screen, "      - Distance to min-%8.8d  : %g\n", ref_id, ddum);
+  } else if (flag == 40){
+    if (fp1) fprintf(fp1, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
+    if (screen) fprintf(screen, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
 
-  } else if (flag == 23){
-    if (fp1) fprintf(fp1, "\nAttempt %d, new activation centered on atom %d", nattempt, that);
-    if (screen) fprintf(screen, "\nAttempt %d, new activation centered on atom %d", nattempt, that);
-
-  } else if (flag == 24){
-    if (fp1) fprintf(fp1, " with total %d atoms. %d success till now.\n", idum, sad_id);
-    if (screen) fprintf(screen, " with total %d atoms. %d success till now.\n", idum, sad_id);
-
-  } else if (flag == 25){
+  } else if (flag == 41){
     if (fp1){
       fprintf(fp1, "    The new sad-%d is now converged as:\n", sad_id);
       fprintf(fp1, "      - Current energy  (eV)      : %.6f\n", ecurrent);
@@ -1927,6 +1897,37 @@ void MinARTn::print_info(const int flag)
       if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
       if (log_level) fprintf(screen, "      - # of force evaluations    : %d\n", neval);
     }
+
+  } else if (flag == 50){
+    if (fp1) fprintf(fp1, "  Stage %d, push over the new saddle, Enew: %g; Eref= %g. Relaxing...\n", stage, ecurrent, eref);
+    if (screen) fprintf(screen, "  Stage %d, push over the new saddle, Enew: %g; Eref= %g. Relaxing...\n", stage, ecurrent, eref);
+
+  } else if (flag == 51){
+    if (fp1){
+      fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(fp1, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      if (log_level)fprintf(fp1, "      - Reference     energy (eV) : %.6f\n", eref);
+      if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
+    }
+    if (screen){
+      fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
+      fprintf(screen, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      if (log_level) fprintf(screen, "      - Reference     energy (eV) : %.6f\n", eref);
+      if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
+    }
+
+  } else if (flag == 60){
+    if (fp1 && log_level) fprintf(fp1, "      - Distance to min-%8.8d  : %g\n", ref_id, ddum);
+    if (screen && log_level) fprintf(screen, "      - Distance to min-%8.8d  : %g\n", ref_id, ddum);
+
+  } else if (flag == 61){
+    if (fp1) fprintf(fp1, "  Stage %d done, the new min (E= %g) of ID  %d is accepted by Metropolis.\n", stage, ecurrent, min_id);
+    if (screen) fprintf(screen, "  Stage %d done, the new min (E= %g) of ID %d is accepted by Metropolis.\n", stage, ecurrent, min_id);
+
+  } else if (flag == 62){
+    if (fp1) fprintf(fp1, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
+    if (screen) fprintf(screen, "  Stage %d done, the new min (E= %g) of ID %d is rejected by Metropolis.\n", stage, ecurrent, min_id);
+
   }
 return;
 }
@@ -1938,7 +1939,7 @@ return;
 void MinARTn::sad_converge(int maxiter)
 {
   ++stage;
-  if (me == 0) print_info(10);
+  if (me == 0) print_info(40);
 
   neval = 0;
   int i,fail;
@@ -1986,7 +1987,7 @@ void MinARTn::sad_converge(int maxiter)
   // output minimization information
   delE = ecurrent-eref;
   ddum = fnorm_sqr();
-  if (me == 0) print_info(25);
+  if (me == 0) print_info(41);
 
 return;
 }
