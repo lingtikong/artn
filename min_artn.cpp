@@ -661,54 +661,54 @@ void MinARTn::read_control()
       error->one(FLERR, str);
     }
 
-    fprintf(fp1, "\n===================================== ARTn based on LAMMPS ========================================\n");
+    fprintf(fp1, "\n#===================================== ARTn based on LAMMPS ========================================\n");
     fprintf(fp1, "# global control parameters\n");
-    fprintf(fp1, "max_num_events    %20d  # %s\n", max_num_events,"Max number of events");
-    fprintf(fp1, "flag_press        %20d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
-    fprintf(fp1, "random_seed       %20d  # %s\n", seed, "Seed for random generator");
-    fprintf(fp1, "init_config_id    %20d  # %s\n", min_id, "ID of the initial stable configuration");
+    fprintf(fp1, "max_num_events      %-18d  # %s\n", max_num_events,"Max number of events");
+    fprintf(fp1, "flag_press          %-18d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
+    fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
+    fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "\n# activation, harmonic well escape\n");
-    fprintf(fp1, "group_4_activat   %20s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
-    fprintf(fp1, "cluster_radius    %20g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
-    fprintf(fp1, "init_step_size    %20g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
-    fprintf(fp1, "basin_factor      %20g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
-    fprintf(fp1, "min_num_ksteps    %20d  # %s\n", min_num_ksteps, "Min # of k-steps before calling Lanczos");
-    fprintf(fp1, "max_perp_move_h   %20d  # %s\n", max_perp_move_h, "Max # of perpendicular steps leaving basin");
-    fprintf(fp1, "max_iter_basin    %20d  # %s\n", max_iter_basin, "Maximum # of iteration for leaving the basin");
-    fprintf(fp1, "increment_size    %20g  # %s\n", increment_size, "Overall scale for the increment moves");
-    fprintf(fp1, "force_th_perp_h   %20g  # %s\n", force_th_perp_h, "Perpendicular force threshold in harmonic well");
-    fprintf(fp1, "eigen_th_well     %20g  # %s\n", eigen_th_well, "Eigenvalue threshold for leaving basin");
+    fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
+    fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
+    fprintf(fp1, "init_step_size      %-18g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
+    fprintf(fp1, "basin_factor        %-18g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
+    fprintf(fp1, "min_num_ksteps      %-18d  # %s\n", min_num_ksteps, "Min # of k-steps before calling Lanczos");
+    fprintf(fp1, "max_perp_move_h     %-18d  # %s\n", max_perp_move_h, "Max # of perpendicular steps leaving basin");
+    fprintf(fp1, "max_iter_basin      %-18d  # %s\n", max_iter_basin, "Maximum # of iteration for leaving the basin");
+    fprintf(fp1, "increment_size      %-18g  # %s\n", increment_size, "Overall scale for the increment moves");
+    fprintf(fp1, "force_th_perp_h     %-18g  # %s\n", force_th_perp_h, "Perpendicular force threshold in harmonic well");
+    fprintf(fp1, "eigen_th_well       %-18g  # %s\n", eigen_th_well, "Eigenvalue threshold for leaving basin");
     fprintf(fp1, "\n# activation, converging to saddle\n");
-    fprintf(fp1, "max_activat_iter  %20d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
-    fprintf(fp1, "use_fire          %20d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle?");
-    fprintf(fp1, "eigen_th_fail     %20g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
-    fprintf(fp1, "force_th_saddle   %20g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
-    fprintf(fp1, "conv_perp_inc     %20d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
-    fprintf(fp1, "max_perp_moves_c  %20d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
-    fprintf(fp1, "force_th_perp_sad %20g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
+    fprintf(fp1, "max_activat_iter    %-18d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
+    fprintf(fp1, "use_fire            %-18d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle?");
+    fprintf(fp1, "eigen_th_fail       %-18g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
+    fprintf(fp1, "force_th_saddle     %-18g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
+    fprintf(fp1, "conv_perp_inc       %-18d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
+    fprintf(fp1, "max_perp_moves_c    %-18d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
+    fprintf(fp1, "force_th_perp_sad   %-18g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
     fprintf(fp1, "\n# confirmation of new found saddle\n");
-    fprintf(fp1, "disp_sad2min_thr  %20g  # %s\n", disp_sad2min_thr, "Minimum distance between saddle and original minimum");
-    fprintf(fp1, "flag_push_back    %20d  # %s\n", flag_push_back, "Push back the saddle to confirm its link with the initial min");
-    fprintf(fp1, "push_over_saddle  %20g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
-    fprintf(fp1, "max_disp_tol      %20g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
-    fprintf(fp1, "max_ener_tol      %20g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
-    fprintf(fp1, "flag_relax_sad    %20d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
+    fprintf(fp1, "disp_sad2min_thr    %-18g  # %s\n", disp_sad2min_thr, "Minimum distance between saddle and original minimum");
+    fprintf(fp1, "flag_push_back      %-18d  # %s\n", flag_push_back, "Push back the saddle to check its linkage to the start");
+    fprintf(fp1, "push_over_saddle    %-18g  # %s\n", push_over_saddle, "Scale of displacement when pushing over the saddle");
+    fprintf(fp1, "max_disp_tol        %-18g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
+    fprintf(fp1, "max_ener_tol        %-18g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
+    fprintf(fp1, "flag_relax_sad      %-18d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
     fprintf(fp1, "\n# Lanczos related parameters\n");
-    fprintf(fp1, "num_lancz_vec_h   %20d  # %s\n", num_lancz_vec_h, "Num of vectors included in Lanczos for escaping well");
-    fprintf(fp1, "num_lancz_vec_c   %20d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
-    fprintf(fp1, "del_disp_lancz    %20g  # %s\n", del_disp_lancz, "Step of the numerical derivative of forces in Lanczos");
-    fprintf(fp1, "eigen_th_lancz    %20g  # %s\n", eigen_th_lancz, "Eigenvalue threshold for Lanczos convergence");
+    fprintf(fp1, "num_lancz_vec_h     %-18d  # %s\n", num_lancz_vec_h, "Num of vectors included in Lanczos for escaping well");
+    fprintf(fp1, "num_lancz_vec_c     %-18d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
+    fprintf(fp1, "del_disp_lancz      %-18g  # %s\n", del_disp_lancz, "Step of the numerical derivative of forces in Lanczos");
+    fprintf(fp1, "eigen_th_lancz      %-18g  # %s\n", eigen_th_lancz, "Eigenvalue threshold for Lanczos convergence");
     fprintf(fp1, "\n# Metropolis\n");
-    fprintf(fp1, "temperature       %20g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
-    fprintf(fp1, "atom_disp_thr     %20g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
+    fprintf(fp1, "temperature         %-18g  # %s\n", temperature, "Temperature for Metropolis algorithm, in eV");
+    fprintf(fp1, "atom_disp_thr       %-18g  # %s\n", atom_disp_thr, "Displacement threshold to identify an atom as displaced");
     fprintf(fp1, "\n# Output related parameters\n");
-    fprintf(fp1, "log_file          %20s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
-    fprintf(fp1, "log_level         %20d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
-    fprintf(fp1, "print_freq        %20d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
-    fprintf(fp1, "event_list_file   %20s  # %s\n", fevent, "File to record the event info; NULL to skip");
-    fprintf(fp1, "dump_min_config   %20s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
-    fprintf(fp1, "dump_sad_config   %20s  # %s\n", fsad, "file for atomic dump of saddle configurations; NULL to skip");
-    fprintf(fp1, "====================================================================================================\n");
+    fprintf(fp1, "log_file            %-18s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
+    fprintf(fp1, "log_level           %-18d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
+    fprintf(fp1, "print_freq          %-18d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
+    fprintf(fp1, "event_list_file     %-18s  # %s\n", fevent, "File to record the event info; NULL to skip");
+    fprintf(fp1, "dump_min_config     %-18s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
+    fprintf(fp1, "dump_sad_config     %-18s  # %s\n", fsad, "file for atomic dump of saddle configurations; NULL to skip");
+    fprintf(fp1, "#====================================================================================================\n");
   }
 
   if (me == 0 && strcmp(fevent, "NULL") != 0){
@@ -1437,6 +1437,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i] + q_k[i] * DEL_LANCZOS;
 
     energy_force(1); ++evalf;
+    reset_coords();
 
     r_k_1 = fix_lanczos->request_vector(0);
     q_k_1 = fix_lanczos->request_vector(1);
@@ -1475,13 +1476,12 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     if (n >= 2){
       dstev_(&jobs, &n, d_bak, e_bak, z, &ldz, work, &info);
 
-      if ((int)info != 0) error->all(FLERR,"ARTn: destev_ error in Lanczos subroute");
+      if (info != 0) error->all(FLERR,"ARTn: destev_ error in Lanczos subroute");
 
       eigen1 = eigen2; eigen2 = d_bak[0];
     }
     if (n >= 3 && fabs((eigen2-eigen1)/eigen1) < eigen_th_lancz) {
       con_flag = 1;
-      reset_coords();
       for (int i = 0; i < nvec; ++i){
 	     xvec[i] = x0tmp[i];
 	     fvec[i] = f0[i];
@@ -1517,7 +1517,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       flag_egvec = 1;
       for (int i=0; i < nvec; ++i) egvec[i] = 0.;
       for (int i=0; i<nvec; ++i)
-	for (int j=0; j<n-1; ++j) egvec[i] += z[j] * lanc[j][i];
+      for (int j=0; j<n-1; ++j) egvec[i] += z[j] * lanc[j][i];
 
       // normalize egvec.
       double sum = 0., sumall;
@@ -1527,7 +1527,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
       sumall = 1. / sqrt(sumall);
       for (int i=0; i < nvec; ++i) egvec[i] *= sumall;
     }
-    reset_coords();
+
     for (int i = 0; i < nvec; ++i){
       xvec[i] = x0tmp[i];
       fvec[i] = f0[i];
