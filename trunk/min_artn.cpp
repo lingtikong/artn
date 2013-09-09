@@ -324,7 +324,7 @@ void MinARTn::metropolis()
   }
   disp_me[0] = dr; disp_me[1] = double(n_moved);
   MPI_Reduce(disp_me, disp_all, 2, MPI_DOUBLE, MPI_SUM, 0, world);
-  drall = disp_all[0]; n_movedall = int(disp_all[1]);
+  drall = sqrt(disp_all[0]); n_movedall = int(disp_all[1]);
 
   if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
 
@@ -344,7 +344,7 @@ void MinARTn::metropolis()
   // Metropolis
   int acc = 0;
   if (me == 0){
-    ddum = sqrt(drall);
+    ddum = drall;
     print_info(60);
 
     if (temperature > 0. && (ecurrent < eref || random->uniform() < exp((eref - ecurrent)/temperature))) acc = 1;
@@ -1194,7 +1194,7 @@ void MinARTn::random_kick()
 {
   // define the central atom that will be activated
   if (me == 0){
-    int index = int(random->uniform()*double(ngroup+1))%ngroup;
+    int index = int(random->uniform()*double(ngroup))%ngroup;
     that = glist[index];
 
     print_info(18);
@@ -1210,12 +1210,12 @@ void MinARTn::random_kick()
   int nhit = 0;
 
   if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
-    for (int i = 0; i<nlocal; ++i){
+    for (int i = 0; i < nlocal; ++i){
       if (tag[i] == that){
         int n = 3*i;
-        delpos[n++] = 0.5 - random->uniform();
-        delpos[n++] = 0.5 - random->uniform();
-        delpos[n++] = 0.5 - random->uniform();
+        delpos[n  ] = 0.5 - random->uniform();
+        delpos[n+1] = 0.5 - random->uniform();
+        delpos[n+2] = 0.5 - random->uniform();
 
         ++nhit; break;
       }
@@ -1225,9 +1225,9 @@ void MinARTn::random_kick()
     for (int i = 0; i < nlocal; ++i){
       if (groupbit & atom->mask[i]){
         int n = 3*i;
-        delpos[n++] = 0.5 - random->uniform();
-        delpos[n++] = 0.5 - random->uniform();
-        delpos[n++] = 0.5 - random->uniform();
+        delpos[n  ] = 0.5 - random->uniform();
+        delpos[n+1] = 0.5 - random->uniform();
+        delpos[n+2] = 0.5 - random->uniform();
 
         ++nhit;
       }
@@ -1253,15 +1253,18 @@ void MinARTn::random_kick()
         double r2 = dx*dx + dy*dy + dz*dz;
         if (r2 <= rcut2){
           int n = 3*i;
-          delpos[n++] = 0.5 - random->uniform();
-          delpos[n++] = 0.5 - random->uniform();
-          delpos[n++] = 0.5 - random->uniform();
+          delpos[n  ] = 0.5 - random->uniform();
+          delpos[n+1] = 0.5 - random->uniform();
+          delpos[n+2] = 0.5 - random->uniform();
 
           ++nhit;
         }
       }
     }
   }
+
+  MPI_Reduce(&nhit,&idum,1,MPI_INT,MPI_SUM,0,world);
+  if (me == 0) print_info(19);
 
   // now normalize and apply the kick to the selected atom(s)
   double norm = 0., normall;
@@ -1273,9 +1276,6 @@ void MinARTn::random_kick()
     h[i] = delpos[i] * norm_i;
     xvec[i] += init_step_size * h[i];
   }
-
-  MPI_Reduce(&nhit,&idum,1,MPI_INT,MPI_SUM,0,world);
-  if (me == 0) print_info(19);
 
 return;
 }
