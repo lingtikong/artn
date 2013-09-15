@@ -66,6 +66,7 @@ private:
 
   // global control
   int max_conv_steps;
+  double max_disp_step;    // Maximum dispalcement per step
   double temperature;      // Fictive temperature, if negative always reject the event
 
   // for art
