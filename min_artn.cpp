@@ -15,7 +15,9 @@
 #include "modify.h"
 #include "fix_minimize.h"
 #include "memory.h"
+#include "stdio.h"
 #include "stdlib.h"
+#include "string.h"
 #include "compute.h"
 #include "force.h"
 #include "group.h"
@@ -383,7 +385,6 @@ void MinARTn::set_defaults()
   sad_found = 0;
   max_num_events   = 1000;
   flag_press       = 0;
-  max_disp_step    = 1.;
 
   // activation, harmonic well escape
   cluster_radius   = 5.0;
@@ -482,10 +483,6 @@ void MinARTn::read_control()
         if (groupname) delete [] groupname;
         groupname = new char [strlen(token2)+1];
         strcpy(groupname, token2);
-
-      } else if (strcmp(token1, "max_disp_step") == 0){
-        max_disp_step = force->numeric(FLERR, token2);
-        if (max_disp_step <= 0.) error->all(FLERR, "ARTn: max_disp_step must be greater than 0.");
 
       } else if (strcmp(token1, "init_step_size") == 0){
         init_step_size = force->numeric(FLERR, token2);
@@ -669,7 +666,6 @@ void MinARTn::read_control()
     fprintf(fp1, "\n#===================================== ARTn based on LAMMPS ========================================\n");
     fprintf(fp1, "# global control parameters\n");
     fprintf(fp1, "max_num_events      %-18d  # %s\n", max_num_events,"Max number of events");
-    fprintf(fp1, "max_disp_step       %-18g  # %s\n", max_disp_step,"Max displacement per step during minimizing");
     fprintf(fp1, "flag_press          %-18d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
     fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
@@ -879,7 +875,7 @@ int MinARTn::find_saddle( )
       
       for (int i = 0; i < nvec; ++i){
         x0tmp[i] = xvec[i];
-        xvec[i] += MIN(max_disp_step, MAX(-max_disp_step, step * fperp[i]));
+        xvec[i] += MIN(dmax, MAX(-dmax, step * fperp[i]));
       }
       ecurrent = energy_force(1); ++evalf;
       artn_reset_vec(); reset_coords();
@@ -942,7 +938,7 @@ int MinARTn::find_saddle( )
 
     // push along the search direction
     step = basin_factor * increment_size;
-    for(int i = 0; i < nvec; ++i) xvec[i] += MIN(max_disp_step, MAX(-max_disp_step, step * h[i]));
+    for(int i = 0; i < nvec; ++i) xvec[i] += MIN(dmax, MAX(-dmax, step * h[i]));
   }
 
   delE = ecurrent-eref;
@@ -1004,7 +1000,7 @@ int MinARTn::find_saddle( )
         
         for (int i = 0; i < nvec; ++i){
           x0tmp[i] = xvec[i];
-          xvec[i] += MIN(max_disp_step, MAX(-max_disp_step, step * fperp[i]));
+          xvec[i] += MIN(dmax, MAX(-dmax, step * fperp[i]));
         }
         ecurrent = energy_force(1); ++evalf;
         artn_reset_vec(); reset_coords(); 
@@ -1115,7 +1111,7 @@ int MinARTn::find_saddle( )
 #define MinEGV 0.5 // was 0.5
     // push along the search direction; E. Cances, et al. JCP, 130, 114711 (2009)
     double factor = sign * MIN(2.*increment_size, fabs(fpar2all)/MAX(fabs(egval), MinEGV));
-    for (int i = 0; i < nvec; ++i) xvec[i] += MIN(max_disp_step, MAX(-max_disp_step, factor * egvec[i]));
+    for (int i = 0; i < nvec; ++i) xvec[i] += MIN(dmax, MAX(-dmax, factor * egvec[i]));
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec(); reset_x00();
   }
@@ -1285,7 +1281,7 @@ void MinARTn::random_kick()
   double norm_i = 1./sqrt(normall);
   for (int i = 0; i < nvec; ++i){
     h[i] = delpos[i] * norm_i;
-    xvec[i] += MIN(max_disp_step, MAX(-max_disp_step, init_step_size * h[i]));
+    xvec[i] += MIN(dmax, MAX(-dmax, init_step_size * h[i]));
   }
 
 return;
@@ -1487,7 +1483,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     if (n >= 2){
       dstev_(&jobs, &n, d_bak, e_bak, z, &ldz, work, &info);
 
-      if (info != 0) error->all(FLERR,"ARTn: destev_ error in Lanczos subroute");
+      if (info != 0) error->all(FLERR,"ARTn: dstev_ error in Lanczos subroute");
 
       eigen1 = eigen2; eigen2 = d_bak[0];
     }
