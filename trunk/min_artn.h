@@ -30,6 +30,7 @@ private:
   int find_saddle();
   int check_sad2min();
   int min_converge(int, const int);
+  int SD_min_converge(int, const int);
   void sad_converge(int);
 
   int push_back_sad();
@@ -102,6 +103,7 @@ private:
   double eigen_th_lancz;   // Eigen_threhold for lanczos convergence
 
   // for convergence
+  int    SD_steps;
   double force_th_saddle;  // Threshold for convergence at saddle point
   double disp_sad2min_thr; // minimum distance between saddle and original min
   double push_over_saddle; // Fraction of displacement over the saddle
