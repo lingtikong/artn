@@ -1,10 +1,5 @@
 /* -------------------------------------------------------------------------------------------------
- * Some features of this code are writtern according to
- * Norman's Code version 3.0 MinARTn. The explanlation of 
- * the parameters I used here can be found in the doc of
- * his code.
- * This code don't do minimizing include extra peratom dof or 
- * extra global dof.
+ * ARTn: Activation Relaxation Technique nouveau
 ------------------------------------------------------------------------------------------------- */
 #include "min_artn.h"
 #include "atom.h"
@@ -264,13 +259,40 @@ return 0;
 ------------------------------------------------------------------------------------------------- */
 void MinARTn::push_down()
 {
+  // calculate the moved atoms at saddle point
+  group->xcm(groupall, masstot, com);
+  double **x = atom->x;
+  double dx, dy, dz;
+  double dxcm[3];
+  dxcm[0] = com[0] - com0[0];
+  dxcm[1] = com[1] - com0[1];
+  dxcm[2] = com[2] - com0[2];
+
+  int n_moved = 0, n_movedall, n = 0;
+  double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
+  for (int i = 0; i < atom->nlocal; ++i) {
+    dx = x[i][0] - x00[n]   - dxcm[0];
+    dy = x[i][1] - x00[n+1] - dxcm[1];
+    dz = x[i][2] - x00[n+2] - dxcm[2];
+
+    tmp = dx*dx + dy*dy + dz*dz;
+    n += 3;
+
+    if (tmp > disp_thr2) ++n_moved;
+  }
+  MPI_Reduce(&n_moved, &n_movedall, 1, MPI_INT, MPI_SUM, 0, world);
+  if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
+
+
   // push down the saddle; fperp carries the direction vector, set by check_sad2min
+
   for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i];
 
   ecurrent = energy_force(1); ++evalf;
   if (me == 0) print_info(50);
 
   // minimization using CG
+  SD_min_converge(SD_steps,1); evalf += neval;
   stop_condition = min_converge(max_conv_steps,1); evalf += neval;
   stopstr = stopstrings(stop_condition);
   artn_reset_vec();
@@ -287,7 +309,7 @@ void MinARTn::push_down()
     update->ntimestep = idum;
   }
 
-return;
+  return;
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -417,6 +439,7 @@ void MinARTn::set_defaults()
   push_over_saddle = 0.2;
   atom_disp_thr    = 0.2;
   temperature      = 0.1;
+  SD_steps         = 5;
 
   // for lanczos
   num_lancz_vec_h  = 30;
@@ -608,6 +631,9 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "conv_perp_inc") == 0){
         conv_perp_inc = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token2, "SD_steps") == 0){
+	SD_steps = force->inumeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
@@ -695,6 +721,7 @@ void MinARTn::read_control()
     fprintf(fp1, "max_disp_tol        %-18g  # %s\n", max_disp_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "max_ener_tol        %-18g  # %s\n", max_ener_tol, "Tolerance displacement to claim the saddle is linked");
     fprintf(fp1, "flag_relax_sad      %-18d  # %s\n", flag_relax_sad, "Further relax the newly found saddle via SD algorithm");
+    fprintf(fp1, "SD_steps            %-18d  # %s\n", SD_steps, "Steepest Descent steps before CG minimizationm");
     fprintf(fp1, "\n# Lanczos related parameters\n");
     fprintf(fp1, "num_lancz_vec_h     %-18d  # %s\n", num_lancz_vec_h, "Num of vectors included in Lanczos for escaping well");
     fprintf(fp1, "num_lancz_vec_c     %-18d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
@@ -1310,6 +1337,7 @@ int MinARTn::min_converge(int maxiter, const int flag)
 
   niter = 0;
   for (int iter = 0; iter < maxiter; ++iter) {
+
     ++niter;
 
     // line minimization along direction h from current atom->x
@@ -1735,14 +1763,14 @@ void MinARTn::print_info(const int flag)
     }
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10      11         12         13         14         15          16       17       18     19        20        21        22\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove    pxx        pyy        pzz        pxy        pxz         pyz     Efinal   status disp-x    disp-y    disp-z     dr\n");
-      fprintf(fp2, "#----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7       8      9        10      11        12         13         14         15         16         17       18     19        20        21        22       23\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl ref  sad   min   center   Eref      Emin     nMove    pxx        pyy        pzz        pxy        pxz         pyz     Efinal   status disp-x    disp-y    disp-z     dr\n");
+      fprintf(fp2, "#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 3){
-      fprintf(fp2, "#  1       2        3       4    5     6      7       8         9        10     11         12     13       14        15     16\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   ref  sad   min   center   Eref      Emin     nMove  Efinal    status disp-x   disp-y    disp-z   dr\n");
-      fprintf(fp2, "#---------------------------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4    5     6      7    8         9        10     11         12     13       14        15     16       17\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl ref  sad   min   center   Eref      Emin     nMove  Efinal    status disp-x   disp-y    disp-z   dr\n");
+      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 10){
     if (fp1){
@@ -1999,3 +2027,67 @@ void MinARTn::sad_converge(int maxiter)
 return;
 }
 /* ---------------------------------------------------------------------------------------------- */
+int MinARTn::SD_min_converge(int maxiter, const int flag)
+{
+  neval = 0;
+  int i,m,n,fail,ntimestep;
+  double fdotf;
+  double *fatom,*hatom;
+
+  // initialize working vectors
+
+  for (i = 0; i < nvec; i++) h[i] = fvec[i];
+  if (nextra_atom)
+    for (m = 0; m < nextra_atom; m++) {
+      fatom = fextra_atom[m];
+      hatom = hextra_atom[m];
+      n = extra_nlen[m];
+      for (i = 0; i < n; i++) hatom[i] = fatom[i];
+    }
+  if (nextra_global)
+    for (i = 0; i < nextra_global; i++) hextra[i] = fextra[i];
+
+  for (int iter = 0; iter < maxiter; iter++) {
+    ntimestep = ++update->ntimestep;
+    niter++;
+
+    // line minimization along h from current position x
+    // h = downhill gradient direction
+
+    eprevious = ecurrent = energy_force(1); ++neval;
+    fail = (this->*linemin)(ecurrent,alpha_final);
+    if (fail) return fail;
+
+    // function evaluation criterion
+
+    if (neval >= update->max_eval) return MAXEVAL;
+
+    // energy tolerance criterion
+
+    if (fabs(ecurrent-eprevious) <
+        update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY))
+      return ETOL;
+
+    // force tolerance criterion
+
+    fdotf = fnorm_sqr();
+    if (fdotf < update->ftol*update->ftol) return FTOL;
+
+    // set new search direction h to f = -Grad(x)
+
+    for (i = 0; i < nvec; i++) h[i] = fvec[i];
+    if (nextra_atom)
+      for (m = 0; m < nextra_atom; m++) {
+        fatom = fextra_atom[m];
+        hatom = hextra_atom[m];
+        n = extra_nlen[m];
+        for (i = 0; i < n; i++) hatom[i] = fatom[i];
+      }
+    if (nextra_global)
+      for (i = 0; i < nextra_global; i++) hextra[i] = fextra[i];
+    if (flag == 2) reset_coords();
+    else if (flag == 1) reset_x00();
+  }
+  return MAXITER;
+   
+}
