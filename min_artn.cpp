@@ -631,7 +631,7 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "conv_perp_inc") == 0){
         conv_perp_inc = force->inumeric(FLERR, token2);
 
-      } else if (strcmp(token2, "SD_steps") == 0){
+      } else if (strcmp(token1, "SD_steps") == 0){
 	SD_steps = force->inumeric(FLERR, token2);
 
       } else {
