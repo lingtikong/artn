@@ -135,7 +135,7 @@ int MinARTn::iterate(int maxevent)
     if (dumpsad){
       int idum = update->ntimestep;
       update->ntimestep = sad_id;
-      dumpsad->write();
+      if(sad_id % dump_sad_every == 0) dumpsad->write();
       update->ntimestep = idum;
     }
 
@@ -305,7 +305,7 @@ void MinARTn::push_down()
   if (dumpmin){
     int idum = update->ntimestep;
     update->ntimestep = min_id;
-    dumpmin->write();
+    if(min_id % dump_min_every == 0) dumpmin->write();
     update->ntimestep = idum;
   }
 
@@ -450,6 +450,8 @@ void MinARTn::set_defaults()
   // output
   log_level        = 1;
   print_freq       = 1;
+  dump_min_every   = 1;
+  dump_sad_every   = 1;
 
 return;
 }
@@ -634,6 +636,12 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "SD_steps") == 0){
 	SD_steps = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "dump_min_every") == 0){
+	dump_min_every = force->inumeric(FLERR, token2);
+
+      } else if (strcmp(token1, "dump_sad_every") == 0){
+	dump_sad_every = force->inumeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
@@ -737,6 +745,8 @@ void MinARTn::read_control()
     fprintf(fp1, "event_list_file     %-18s  # %s\n", fevent, "File to record the event info; NULL to skip");
     fprintf(fp1, "dump_min_config     %-18s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
     fprintf(fp1, "dump_sad_config     %-18s  # %s\n", fsad, "file for atomic dump of saddle configurations; NULL to skip");
+    fprintf(fp1, "dump_min_every      %-18d  # %s\n", dump_min_every, "Dump min configuration every # step (if 0, no dump)");
+    fprintf(fp1, "dump_sad_every      %-18d  # %s\n", dump_sad_every, "Dump sad configuration every # step (if 0, no dump)");
     fprintf(fp1, "#====================================================================================================\n");
   }
 
@@ -758,7 +768,7 @@ void MinARTn::read_control()
     strcpy(tmp[2],"atom");
     strcpy(tmp[3],"1");
     strcpy(tmp[4],fmin);
-    dumpmin = new DumpAtom(lmp, 5, tmp);
+    if(dump_min_every) dumpmin = new DumpAtom(lmp, 5, tmp);
   }
 
   if (strcmp(fsad, "NULL") != 0){
@@ -767,7 +777,7 @@ void MinARTn::read_control()
     strcpy(tmp[2],"atom");
     strcpy(tmp[3],"1");
     strcpy(tmp[4],fsad);
-    dumpsad = new DumpAtom(lmp, 5, tmp);
+    if(dump_sad_every) dumpsad = new DumpAtom(lmp, 5, tmp);
   }
 
   memory->destroy(tmp);

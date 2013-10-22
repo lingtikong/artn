@@ -117,6 +117,8 @@ private:
   char *flog, *fevent, *fconfg;
   int log_level;           // 1, all; 0, main
   int print_freq;          // default 1
+  int dump_min_every;      // dump min configuration every # step
+  int dump_sad_every;      // dump sadl configuration every # step
   int idum;
   double ddum;
 
