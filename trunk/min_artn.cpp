@@ -296,6 +296,7 @@ void MinARTn::push_down()
   stop_condition = min_converge(max_conv_steps,1); evalf += neval;
   stopstr = stopstrings(stop_condition);
   artn_reset_vec();
+  reset_x00();
 
   // output minimization information
   if (me == 0) print_info(51);
@@ -423,7 +424,7 @@ void MinARTn::set_defaults()
   max_activat_iter  = 100;
   use_fire          = 0;
   force_th_saddle   = 0.005;
-  eigen_th_fail     = 0.1;
+  eigen_th_fail     = 0.000;
   conv_perp_inc     = 40;
   max_perp_moves_c  = 15;
   force_th_perp_sad = 0.001;
@@ -567,7 +568,6 @@ void MinARTn::read_control()
 
       } else if (strcmp(token1, "eigen_th_fail") == 0){
         eigen_th_fail = force->numeric(FLERR, token2);
-        if (eigen_th_fail <=  0.) error->all(FLERR, "ARTn: eigen_th_fail must be greater than 0.");
 
       } else if (!strcmp(token1, "atom_disp_thr")){
         atom_disp_thr = force->numeric(FLERR, token2);
