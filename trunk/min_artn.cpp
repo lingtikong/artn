@@ -1258,7 +1258,8 @@ void MinARTn::random_kick()
         int n = 3*i;
         delpos[n  ] = 0.5 - random->uniform();
         delpos[n+1] = 0.5 - random->uniform();
-        delpos[n+2] = 0.5 - random->uniform();
+        if(domain->dimension == 3)delpos[n+2] = 0.5 - random->uniform();
+        else delpos[n+2] = 0.;
 
         ++nhit; break;
       }
@@ -1270,13 +1271,13 @@ void MinARTn::random_kick()
         int n = 3*i;
         delpos[n  ] = 0.5 - random->uniform();
         delpos[n+1] = 0.5 - random->uniform();
-        delpos[n+2] = 0.5 - random->uniform();
-
+        if(domain->dimension == 3)delpos[n+2] = 0.5 - random->uniform();
+        else delpos[n+2] = 0.;
         ++nhit;
       }
     }
 
-  } else { // only atoms in group and within a radius to the central atom will be kicked
+  } else { // only atoms within a radius to the central atom will be kicked
     double one[3]; one[0] = one[1] = one[2] = 0.;
     for (int i = 0; i < nlocal; ++i){
       if (tag[i] == that){
@@ -1288,21 +1289,21 @@ void MinARTn::random_kick()
     MPI_Allreduce(&one[0], &cord[0], 3, MPI_DOUBLE, MPI_SUM, world);
     double rcut2 = cluster_radius * cluster_radius;
     for (int i = 0; i < nlocal; ++i){
-      if (groupbit & atom->mask[i]){
-        double dx = atom->x[i][0] - cord[0];
-        double dy = atom->x[i][1] - cord[1];
-        double dz = atom->x[i][2] - cord[2];
-        domain->minimum_image(dx, dy, dz);
-        double r2 = dx*dx + dy*dy + dz*dz;
-        if (r2 <= rcut2){
-          int n = 3*i;
-          delpos[n  ] = 0.5 - random->uniform();
-          delpos[n+1] = 0.5 - random->uniform();
-          delpos[n+2] = 0.5 - random->uniform();
-
-          ++nhit;
-        }
+      //if (groupbit & atom->mask[i]){
+      double dx = atom->x[i][0] - cord[0];
+      double dy = atom->x[i][1] - cord[1];
+      double dz = atom->x[i][2] - cord[2];
+      domain->minimum_image(dx, dy, dz);
+      double r2 = dx*dx + dy*dy + dz*dz;
+      if (r2 <= rcut2){
+        int n = 3*i;
+        delpos[n  ] = 0.5 - random->uniform();
+        delpos[n+1] = 0.5 - random->uniform();
+        if(domain->dimension == 3)delpos[n+2] = 0.5 - random->uniform();
+        else delpos[n+2] = 0.;
+        ++nhit;
       }
+      //}
     }
   }
 
@@ -1451,8 +1452,15 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
   const double IDEL_LANCZOS = 1.0 / DEL_LANCZOS;
 
   // set r(k-1) according to egvec or random vector
+  int nlocal = atom->nlocal;
   if (egvec_exist) for (int i = 0; i < nvec; ++i) r_k_1[i] = egvec[i];
-  else for (int i = 0; i < nvec; ++i) r_k_1[i] = 0.5 - random->uniform();
+  else for (int i = 0; i < nlocal; ++i) {
+    int n = i*3;
+    r_k_1[n]   = 0.5 - random->uniform();
+    r_k_1[n+1] = 0.5 - random->uniform();
+    if(domain->dimension == 3)r_k_1[n+2] = 0.5 - random->uniform();
+    else r_k_1[n+2] = 0.;
+  }
   for (int i =0; i < nvec; ++i) beta_k_1 += r_k_1[i] * r_k_1[i];
 
   MPI_Allreduce(&beta_k_1,&tmp,1,MPI_DOUBLE,MPI_SUM,world);
