@@ -84,7 +84,8 @@ int MinARTn::iterate(int maxevent)
   // minimize before searching saddle points.
   if (me == 0) print_info(0);
 
-  stop_condition = min_converge(max_conv_steps,0); evalf += neval;
+  if(!min_fire)stop_condition = min_converge(max_conv_steps,0);
+  else stop_condition = min_converge_fire(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
@@ -209,7 +210,12 @@ int MinARTn::push_back_sad()
   if (me == 0) print_info(30);
 
   // minimization using CG
-  stop_condition = min_converge(max_conv_steps,2); evalf += neval;
+  if(!min_fire){
+    stop_condition = min_converge(max_conv_steps,2); 
+  }else{
+    stop_condition = min_converge_fire(max_conv_steps);
+  }
+  evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
   reset_coords();
 
@@ -291,9 +297,10 @@ void MinARTn::push_down()
   ecurrent = energy_force(1); ++evalf;
   if (me == 0) print_info(50);
 
-  // minimization using CG
-  SD_min_converge(SD_steps,1); evalf += neval;
+  // minimization using CG or FIRE
+  if(!min_fire){SD_min_converge(SD_steps,1); evalf += neval;
   stop_condition = min_converge(max_conv_steps,1); evalf += neval;
+  }else{stop_condition = min_converge_fire(max_conv_steps); evalf += neval;}
   stopstr = stopstrings(stop_condition);
   artn_reset_vec();
   reset_x00();
@@ -408,6 +415,7 @@ void MinARTn::set_defaults()
   sad_found = 0;
   max_num_events   = 1000;
   flag_press       = 0;
+  min_fire         = 0;
 
   // activation, harmonic well escape
   cluster_radius   = 5.0;
@@ -642,10 +650,14 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "dump_sad_every") == 0){
 	dump_sad_every = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "min_fire") == 0){
+	min_fire = force->inumeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
-      }
+      } 
+
     }
     fclose(fp);
   }
@@ -716,7 +728,8 @@ void MinARTn::read_control()
     fprintf(fp1, "eigen_th_well       %-18g  # %s\n", eigen_th_well, "Eigenvalue threshold for leaving basin");
     fprintf(fp1, "\n# activation, converging to saddle\n");
     fprintf(fp1, "max_activat_iter    %-18d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
-    fprintf(fp1, "use_fire            %-18d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle?");
+    fprintf(fp1, "use_fire            %-18d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle");
+    fprintf(fp1, "min_fire            %-18d  # %s\n", min_fire, "use FIRE to do minimization both in push back & push forward");
     fprintf(fp1, "eigen_th_fail       %-18g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
     fprintf(fp1, "force_th_saddle     %-18g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
     fprintf(fp1, "conv_perp_inc       %-18d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
@@ -1601,8 +1614,7 @@ return MIN(int(n),maxvec);
 }
 
 /* ---------------------------------------------------------------------------
- *  FIRE: fast interial relaxation engine, here d_min is not considered.
- *  return iteration number
+ *  FIRE: fast interial relaxation engine, return iteration number
  * -------------------------------------------------------------------------*/
 int MinARTn::min_perp_fire(int maxiter)
 {
@@ -2119,4 +2131,116 @@ int MinARTn::SD_min_converge(int maxiter, const int flag)
   }
   return MAXITER;
    
+}
+int MinARTn::min_converge_fire(int maxiter){
+  double dt = update->dt;
+  const int n_min = 5;
+  const double f_inc = 1.1;
+  const double f_dec = 0.5;
+  const double alpha_start = 0.1;
+  const double f_alpha = 0.99;
+  const double  TMAX = 10.;
+  const double dtmax = TMAX * dt;
+  double vdotf, vdotfall;
+  double vdotvall;
+  double fdotfall;
+  double fdoth, fdothall;
+  double scale1, scale2;
+  double alpha;
+  int last_negative = 0;
+  neval = 0;
+
+  double force_thr2 = force_th_perp_sad*force_th_perp_sad;
+
+  for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
+
+  alpha = alpha_start;
+  for (int iter = 0; iter < maxiter; ++iter){
+    vdotf = 0.;
+    for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fvec[i];
+    MPI_Allreduce(&vdotf,&vdotfall,1,MPI_DOUBLE,MPI_SUM,world);
+
+    // if (v dot f) > 0:
+    // v = (1-alpha) v + alpha |v| Fhat
+    // |v| = length of v, Fhat = unit f
+    // if more than DELAYSTEP since v dot f was negative:
+    // increase timestep and decrease alpha
+    if (vdotfall > 0.) {
+      double tmp_me[2], tmp_all[2];
+      scale1 = 1. - alpha;
+      tmp_me[0] = tmp_me[1] = 0.;
+      for (int i = 0; i < nvec; ++i) {
+	tmp_me[0] += vvec[i] * vvec[i];
+	tmp_me[1] += fvec[i] * fvec[i];
+      }
+      MPI_Allreduce(tmp_me, tmp_all,2,MPI_DOUBLE,MPI_SUM,world);
+      vdotvall = tmp_all[0]; fdotfall = tmp_all[1];
+
+      if (fdotfall == 0.) scale2 = 0.;
+      else scale2 = alpha * sqrt(vdotvall/fdotfall);
+      for (int i = 0; i < nvec; ++i) vvec[i] = scale1 * vvec[i] + scale2 * fvec[i];
+
+      if ((iter - last_negative) > n_min) {
+	dt = MIN(dt * f_inc, dtmax);
+	alpha = alpha * f_alpha;
+      }
+
+    } else {
+      last_negative = iter;
+      dt = dt * f_dec;
+      for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
+      alpha = alpha_start;
+    }
+    double **x = atom->x;
+    double **v = atom->v;
+    double *rmass = atom->rmass;
+    double *mass = atom->mass;
+    int *type = atom->type;
+    double dtfm;
+    double dtf = dt * force->ftm2v;
+    int n = 0;
+    if (rmass) {
+      for (int i = 0; i < atom->nlocal; ++i) {
+	dtfm = dtf / rmass[i];
+	x[i][0] += dt * v[i][0];
+	x[i][1] += dt * v[i][1];
+	x[i][2] += dt * v[i][2];
+	v[i][0] += dtfm * fvec[n++];
+	v[i][1] += dtfm * fvec[n++];
+	v[i][2] += dtfm * fvec[n++];
+      }
+    } else {
+      for (int i = 0; i < atom->nlocal; ++i) {
+	dtfm = dtf / mass[type[i]];
+	x[i][0] += dt * v[i][0];
+	x[i][1] += dt * v[i][1];
+	x[i][2] += dt * v[i][2];
+	v[i][0] += dtfm * fvec[n++];
+	v[i][1] += dtfm * fvec[n++];
+	v[i][2] += dtfm * fvec[n++];
+      }
+    }
+    eprevious = ecurrent;
+    ecurrent = energy_force(1); ++neval;
+    artn_reset_vec();
+    // energy tolerance criterion
+    // only check after DELAYSTEP elapsed since velocties reset to 0
+
+    if (update->etol > 0.0 && iter-last_negative > n_min) {
+      if (fabs(ecurrent-eprevious) <
+	  update->etol * 0.5*(fabs(ecurrent) + fabs(eprevious) + EPS_ENERGY))
+	return ETOL;
+    }
+    // force tolerance criterion
+
+    if (update->ftol > 0.0) {
+      double fdotf = fnorm_sqr();
+      if (fdotf < update->ftol*update->ftol) return FTOL;
+    }
+
+
+  }
+
+  return MAXITER;
+
 }
