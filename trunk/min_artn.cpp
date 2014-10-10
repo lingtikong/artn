@@ -1678,7 +1678,18 @@ int MinARTn::min_perp_fire(int maxiter)
     double *mass = atom->mass;
     int *type = atom->type;
     double dtfm;
-    double dtf = dt * force->ftm2v;
+    // limit timestep so no particle moves further than dmax
+    double dtvone = dt;
+    double vmax = 0.;
+    double dtv;
+    for (int i = 0; i < atom->nlocal; i++) {
+      vmax = MAX(fabs(v[i][0]),fabs(v[i][1]));
+      vmax = MAX(vmax,fabs(v[i][2]));
+      if (dtvone*vmax > dmax) dtvone = dmax/vmax;
+    }
+    MPI_Allreduce(&dtvone,&dtv,1,MPI_DOUBLE,MPI_MIN,world);
+
+    double dtf = dtv * force->ftm2v;
     int n = 0;
     if (rmass) {
       for (int i = 0; i < atom->nlocal; ++i) {
