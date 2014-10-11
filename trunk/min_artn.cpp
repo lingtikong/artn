@@ -20,6 +20,7 @@
 #include "output.h"
 
 #define MAXLINE 512
+
 #define ZERO  1.e-10
 
 using namespace LAMMPS_NS;
