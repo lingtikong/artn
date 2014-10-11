@@ -732,7 +732,7 @@ void MinARTn::read_control()
     fprintf(fp1, "min_fire            %-18d  # %s\n", min_fire, "use FIRE to do minimization both in push back & push forward");
     fprintf(fp1, "eigen_th_fail       %-18g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
     fprintf(fp1, "force_th_saddle     %-18g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
-    fprintf(fp1, "conv_perp_inc       %-18d  # %s\n", conv_perp_inc, "Increment of max # of perpendicular steps when fpar > -1.0");
+    fprintf(fp1, "conv_perp_inc       %-18d  # %s\n", conv_perp_inc, "The basic steps of max # of perpendicular steps approaching the saddle");
     fprintf(fp1, "max_perp_moves_c    %-18d  # %s\n", max_perp_moves_c, "Maximum # of perpendicular steps approaching the saddle");
     fprintf(fp1, "force_th_perp_sad   %-18g  # %s\n", force_th_perp_sad, "Perpendicular force threshold approaching saddle point");
     fprintf(fp1, "\n# confirmation of new found saddle\n");
@@ -1012,7 +1012,7 @@ int MinARTn::find_saddle( )
   double hdot, hdotall;
 
   // now try to move close to the saddle point according to the egvec.
-  int inc = 0;
+  int inc = conv_perp_inc;
   for (int it_s = 0; it_s < max_activat_iter; ++it_s){
 
     // g store old h
@@ -1028,11 +1028,11 @@ int MinARTn::find_saddle( )
 
     // do minimizing perpendicular use SD or FIRE
     if (use_fire) {
-      m_perp = trial = min_perp_fire(it_s + max_perp_moves_c + inc);
+      m_perp = trial = min_perp_fire(MIN(max_perp_moves_c, it_s + inc));
     } else {
       m_perp = trial = nfail = 0;
       step = increment_size * 0.25;
-      int max_perp = max_perp_moves_c + it_s + inc;
+      int max_perp = MIN(max_perp_moves_c,it_s + inc);
       preenergy = ecurrent;
       while ( 1 ){
         fdoth = 0.;
@@ -1054,9 +1054,6 @@ int MinARTn::find_saddle( )
         }
         ecurrent = energy_force(1); ++evalf;
         artn_reset_vec(); reset_coords(); 
-
-        // debug
-        if (fp1 && that == 5720) fprintf(fp1,"%8d %10.5f %10.5f %10.5f %3d %3d %5d\n", it_s, ecurrent, eref, ecurrent-eref,m_perp, trial, nlanc);
         
         if (ecurrent < preenergy){
           step *= 1.2;
@@ -1082,7 +1079,6 @@ int MinARTn::find_saddle( )
     }
     MPI_Allreduce(tmp_me, tmp_all, 3, MPI_DOUBLE, MPI_SUM, world);
     ftotall = sqrt(tmp_all[0]); delr = sqrt(tmp_all[1]); fpar2all = tmp_all[2];
-    if (fpar2all > -1.) inc = conv_perp_inc;
    
     // output information
     fperp2 = 0.;
