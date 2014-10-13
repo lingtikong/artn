@@ -111,8 +111,14 @@ int MinARTn::iterate(int maxevent)
 
   // print header of event log file
   if (me == 0 && fp2){
-    if (flag_press) print_info(2);
+    if (!flag_push_over){
+      fprintf(fp2, "#  1       2        3       4    \n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl \n");
+      fprintf(fp2, "#---------------------------------\n");
+
+    } else {if (flag_press) print_info(2);
     else print_info(3);
+    }
   }
 
   // main loop of ARTn
@@ -140,10 +146,19 @@ int MinARTn::iterate(int maxevent)
       if(sad_id % dump_sad_every == 0) dumpsad->write();
       update->ntimestep = idum;
     }
+    // analysis saddle point
+    analysis_saddle();
 
     // Relaxation & Metropolis
-    push_down();
-    metropolis();
+    if(flag_push_over){
+      push_down();
+      metropolis();
+    }else{
+      if (me == 0 && fp2) fprintf(fp2, "\n");
+      for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+      ecurrent = energy_force(1); ++evalf;
+      artn_reset_vec();
+    }
   }
 
   // finalize ARTn
@@ -262,10 +277,9 @@ return 0;
 }
 
 /* -------------------------------------------------------------------------------------------------
- * push the configuration push_down
+ * analysis saddle point
 ------------------------------------------------------------------------------------------------- */
-void MinARTn::push_down()
-{
+void MinARTn::analysis_saddle(){
   // calculate the moved atoms at saddle point
   group->xcm(groupall, masstot, com);
   double **x = atom->x;
@@ -289,8 +303,13 @@ void MinARTn::push_down()
   }
   MPI_Reduce(&n_moved, &n_movedall, 1, MPI_INT, MPI_SUM, 0, world);
   if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
+}
 
-
+/* -------------------------------------------------------------------------------------------------
+ * push the configuration push_down
+------------------------------------------------------------------------------------------------- */
+void MinARTn::push_down()
+{
   // push down the saddle; fperp carries the direction vector, set by check_sad2min
 
   for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i];
@@ -446,6 +465,7 @@ void MinARTn::set_defaults()
   flag_relax_sad   = 0;
 
   // convergence to new minimum
+  flag_push_over   = 1;
   push_over_saddle = 0.2;
   atom_disp_thr    = 0.2;
   temperature      = 0.1;
@@ -654,6 +674,9 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "min_fire") == 0){
 	min_fire = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "flag_push_over") == 0){
+	flag_push_over = force->inumeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
@@ -716,6 +739,7 @@ void MinARTn::read_control()
     fprintf(fp1, "flag_press          %-18d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
     fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
+    fprintf(fp1, "flag_push_over      %-18d  # %s\n", flag_push_over, "Flag whether to push over saddle to find another minimum");
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");

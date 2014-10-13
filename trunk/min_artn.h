@@ -29,6 +29,7 @@ private:
 
   int find_saddle();
   int check_sad2min();
+  void analysis_saddle();
   int min_converge(int, const int);
   int min_converge_fire(int);
   int SD_min_converge(int, const int);
@@ -78,6 +79,7 @@ private:
   int use_fire;            // use FIRE to do minimization in the perpendicular direction
   int min_fire;            // use FIRE to do minimization both in push back & push forward
   int flag_push_back;      // if 1, will push back saddle point to check if it connect with the minimum
+  int flag_push_over;      // if 1, wiil push over saddle point to reach another minimum
   int flag_relax_sad;      // further relax to the newly found saddle
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
   double max_ener_tol;     // energy tolerance 
