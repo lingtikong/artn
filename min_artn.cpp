@@ -153,7 +153,7 @@ return MAXITER;
 }
 
 /* -------------------------------------------------------------------------------------------------
- * return 0 if distance between new saddle and original min is greater than initial kick.
+ * return 0 if distance between new saddle and original min is greater than initial kick & delE > 0.
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::check_sad2min()
 {
@@ -181,7 +181,7 @@ int MinARTn::check_sad2min()
   ddum = sqrt(tmp_all[0]);
 
   int status = 0;
-  if (ddum >= disp_sad2min_thr){
+  if (ddum >= disp_sad2min_thr && delE > 0.){
     if (me == 0) print_info(20);
 
     if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i] * push_over_saddle;
