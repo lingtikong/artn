@@ -199,7 +199,9 @@ int MinARTn::check_sad2min()
   if (ddum >= disp_sad2min_thr && delE > 0.){
     if (me == 0) print_info(20);
 
-    if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i) fperp[i] = egvec[i] * push_over_saddle;
+    if (tmp_all[1] > 0.) for (int i = 0; i < nvec; ++i){ 
+      fperp[i] = push_over_saddle > 0 ? egvec[i] * push_over_saddle : egvec[i] * (-push_over_saddle * ddum);
+    }
     else for (int i = 0; i < nvec; ++i) fperp[i] = -egvec[i] * push_over_saddle;
 
   } else {
@@ -740,6 +742,7 @@ void MinARTn::read_control()
     fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "flag_push_over      %-18d  # %s\n", flag_push_over, "Flag whether to push over saddle to find another minimum");
+    fprintf(fp1, "min_fire            %-18d  # %s\n", min_fire, "use FIRE to do minimization both in push back & push forward");
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
@@ -754,7 +757,6 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# activation, converging to saddle\n");
     fprintf(fp1, "max_activat_iter    %-18d  # %s\n", max_activat_iter, "Maximum # of iteraction to approach the saddle");
     fprintf(fp1, "use_fire            %-18d  # %s\n", use_fire, "Use FIRE for perpendicular steps approaching the saddle");
-    fprintf(fp1, "min_fire            %-18d  # %s\n", min_fire, "use FIRE to do minimization both in push back & push forward");
     fprintf(fp1, "eigen_th_fail       %-18g  # %s\n", eigen_th_fail, "Eigen threshold for failure in searching the saddle");
     fprintf(fp1, "force_th_saddle     %-18g  # %s\n", force_th_saddle, "Force threshold for convergence at saddle point");
     fprintf(fp1, "conv_perp_inc       %-18d  # %s\n", conv_perp_inc, "The basic steps of max # of perpendicular steps approaching the saddle");
