@@ -28,6 +28,7 @@ private:
   void random_kick();
 
   int find_saddle();
+  int new_find_saddle();
   int check_sad2min();
   void analysis_saddle();
   int min_converge(int, const int);
@@ -44,6 +45,7 @@ private:
   void reset_x00();
   int lanczos(bool, int, int);
   int min_perp_fire(int);
+  int new_min_perp_fire(int);
 
   int sad_found;
   int ref_id, min_id, sad_id, ref_0;
@@ -73,6 +75,7 @@ private:
 
   // for art
   int nattempt, stage;
+  int fire_lanczos_every;
   int max_num_events;      // Maximum number of events
   int max_activat_iter;    // Maximum number of iteractions for reaching the saddle point
   double increment_size;   // Overall scale for the increment moves
@@ -108,6 +111,9 @@ private:
 
   // for convergence
   int    SD_steps;
+  int    flag_test;
+  double para_factor;
+  int fire_output_every;
   double force_th_saddle;  // Threshold for convergence at saddle point
   double disp_sad2min_thr; // minimum distance between saddle and original min
   double push_over_saddle; // Fraction of displacement over the saddle
