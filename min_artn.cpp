@@ -49,7 +49,7 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
   random = NULL;
   pressure = NULL;
   dumpmin = dumpsad = NULL;
-  egvec = x0tmp = x00 = vvec = fperp = NULL;
+  egvec = x0tmp = x00 = fperp = NULL;
 
   fp1 = fp2 = NULL;
   glist = NULL;
@@ -386,6 +386,7 @@ void MinARTn::metropolis()
 
   // set v = 0 to calculate pressure
   if (flag_press){
+    double *vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
 
     ++update->ntimestep;
@@ -857,7 +858,6 @@ void MinARTn::artn_init()
 
   evalf = 0;
   flag_egvec = 0;
-  if (nvec) vvec = atom->v[0];
 
   // peratom vector I use
   fix_minimize->store_box();
@@ -1840,6 +1840,7 @@ int MinARTn::min_perp_fire(int maxiter)
   int last_negative = 0;
 
   double force_thr2 = force_th_perp_sad*force_th_perp_sad;
+  double *vvec = atom->v[0];
 
   for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
 
@@ -1853,6 +1854,7 @@ int MinARTn::min_perp_fire(int maxiter)
     for (int i = 0; i < nvec; ++i) fperp[i] = fvec[i] - fdothall * h[i];
 
     vdotf = 0.;
+    vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fperp[i];
     MPI_Allreduce(&vdotf,&vdotfall,1,MPI_DOUBLE,MPI_SUM,world);
     
@@ -1965,6 +1967,7 @@ int MinARTn::new_min_perp_fire(int maxiter)
 
   double force_thr2 = force_th_saddle*force_th_saddle;
 
+  double *vvec = atom->v[0];
   for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
 
   alpha = alpha_start;
@@ -2030,6 +2033,7 @@ int MinARTn::new_min_perp_fire(int maxiter)
     for (int i = 0; i < nvec; ++i) fperp[i] = fvec[i] - (1 + para_factor) * fdothall * h[i];
 
     vdotf = 0.;
+    vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fperp[i];
     MPI_Allreduce(&vdotf,&vdotfall,1,MPI_DOUBLE,MPI_SUM,world);
     
@@ -2562,11 +2566,13 @@ int MinARTn::min_converge_fire(int maxiter){
 
   double force_thr2 = force_th_perp_sad*force_th_perp_sad;
 
+  double *vvec = atom->v[0];
   for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
     vdotf = 0.;
+    vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fvec[i];
     MPI_Allreduce(&vdotf,&vdotfall,1,MPI_DOUBLE,MPI_SUM,world);
 

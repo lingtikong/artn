@@ -63,7 +63,6 @@ private:
   double *egvec;
   double *x0tmp;
   double *x00;
-  double *vvec;
   double *fperp;
 
   int seed;
