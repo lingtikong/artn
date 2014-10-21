@@ -159,6 +159,7 @@ int MinARTn::iterate(int maxevent)
       ecurrent = energy_force(1); ++evalf;
       artn_reset_vec();
     }
+    fflush(fp2);
   }
 
   // finalize ARTn
