@@ -54,6 +54,7 @@ private:
   Compute *pressure;
 
   int me, np;
+  int iatom;               // index of current atom to find saddlepoint when using events_per_atom
   bigint evalf;
   bool flag_egvec;
 
@@ -80,6 +81,7 @@ private:
   double increment_size;   // Overall scale for the increment moves
   int use_fire;            // use FIRE to do minimization in the perpendicular direction
   int min_fire;            // use FIRE to do minimization both in push back & push forward
+  int events_per_atom;     // Find designed number of ARTn events on each atom, set to 0 to shutoff this method
   int flag_push_back;      // if 1, will push back saddle point to check if it connect with the minimum
   int flag_push_over;      // if 1, wiil push over saddle point to reach another minimum
   int flag_relax_sad;      // further relax to the newly found saddle

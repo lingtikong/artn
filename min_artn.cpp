@@ -123,6 +123,12 @@ int MinARTn::iterate(int maxevent)
 
   // main loop of ARTn
   int ievent = 0;
+
+  // define the variable needed for events_per_atom
+  int events_iterator = 0;
+  iatom = 0;
+  if (events_per_atom != 0) max_num_events = events_per_atom * ngroup;
+
   while (ievent < max_num_events){
     // activation
     stage = 1; ++nattempt;
@@ -160,6 +166,7 @@ int MinARTn::iterate(int maxevent)
       artn_reset_vec();
     }
     fflush(fp2);
+    if (++events_iterator >= events_per_atom){ ++iatom;events_iterator = 0;}
   }
 
   // finalize ARTn
@@ -441,6 +448,7 @@ void MinARTn::set_defaults()
   max_num_events   = 1000;
   flag_press       = 0;
   min_fire         = 0;
+  events_per_atom  = 0;
 
   // activation, harmonic well escape
   cluster_radius   = 5.0;
@@ -698,6 +706,9 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "flag_test") == 0){
 	flag_test = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "events_per_atom") == 0){
+	events_per_atom = force->inumeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
@@ -762,6 +773,7 @@ void MinARTn::read_control()
     fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "flag_push_over      %-18d  # %s\n", flag_push_over, "Flag whether to push over saddle to find another minimum");
+    fprintf(fp1, "events_per_atom     %-18d  # %s\n", events_per_atom, "Find designed events per atom, set to 0 to shutoff this method");
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
@@ -1455,9 +1467,12 @@ void MinARTn::random_kick()
 {
   // define the central atom that will be activated
   if (me == 0){
-    int index = int(random->uniform()*double(ngroup))%ngroup;
-    that = glist[index];
-
+    if(events_per_atom == 0){
+      int index = int(random->uniform()*double(ngroup))%ngroup;
+      that = glist[index];
+    }else{
+      that = glist[iatom];
+    }
     print_info(18);
   }
   MPI_Bcast(&that, 1, MPI_INT, 0, world);
@@ -1469,6 +1484,8 @@ void MinARTn::random_kick()
   int nlocal = atom->nlocal;
   int *tag   = atom->tag;
   int nhit = 0;
+
+
 
   if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
     for (int i = 0; i < nlocal; ++i){
@@ -1937,7 +1954,8 @@ int MinARTn::min_perp_fire(int maxiter)
   }
 
 return maxiter;
-}
+} 
+
 /* ---------------------------------------------------------------------------
  *  FIRE: fast interial relaxation engine, return iteration number
  * -------------------------------------------------------------------------*/
@@ -1960,12 +1978,12 @@ int MinARTn::new_min_perp_fire(int maxiter)
   int last_negative = 0;
   int nlanc = 0;
   double hdot = 0., hdotall = 0.;
-  double tmp_me[2]={0.}, tmp_all[3]={0.};
+  double tmp_me[3]={0.}, tmp_all[3]={0.};
   double tmp = 0.;
   double delr, ftotall, fpar2all;
   double fperp2, fperp2all;
 
-  double force_thr2 = force_th_saddle*force_th_saddle;
+  const double force_thr2 = force_th_saddle*force_th_saddle;
 
   double *vvec = atom->v[0];
   for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
@@ -1985,7 +2003,7 @@ int MinARTn::new_min_perp_fire(int maxiter)
       for(int i = 0; i < nvec; ++i) hdot += h[i] * g[i];
       MPI_Reduce(&hdot,&hdotall,1,MPI_DOUBLE,MPI_SUM,0,world);
     }
-    if(iter % fire_lanczos_every == 0){
+    if(iter % fire_output_every == 0){
       tmp_me[0] = tmp_me[1] = tmp_me[2] = 0.;
       for (int i = 0; i < nvec; ++i) {
 	tmp_me[0] += fvec[i] * fvec[i];
