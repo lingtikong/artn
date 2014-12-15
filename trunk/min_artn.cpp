@@ -112,9 +112,9 @@ int MinARTn::iterate(int maxevent)
   // print header of event log file
   if (me == 0 && fp2){
     if (!flag_push_over){
-      fprintf(fp2, "#  1       2        3       4    \n");
-      fprintf(fp2, "#Event   del-E   egv-sad   nsadl \n");
-      fprintf(fp2, "#---------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4       5     6      7      8\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl sad-dx sad-dy sad-dz sad-dr\n");
+      fprintf(fp2, "#----------------------------------------------------------\n");
 
     } else {if (flag_press) print_info(2);
     else print_info(3);
@@ -302,18 +302,24 @@ void MinARTn::analysis_saddle(){
 
   int n_moved = 0, n_movedall, n = 0;
   double tmp, disp_thr2 = atom_disp_thr*atom_disp_thr;
+  double temp[3]={0}, tempall[3]={0};
   for (int i = 0; i < atom->nlocal; ++i) {
     dx = x[i][0] - x00[n]   - dxcm[0];
     dy = x[i][1] - x00[n+1] - dxcm[1];
     dz = x[i][2] - x00[n+2] - dxcm[2];
 
+    temp[0] += dx*dx;
+    temp[1] += dy*dy;
+    temp[2] += dz*dz;
     tmp = dx*dx + dy*dy + dz*dz;
     n += 3;
 
     if (tmp > disp_thr2) ++n_moved;
   }
   MPI_Reduce(&n_moved, &n_movedall, 1, MPI_INT, MPI_SUM, 0, world);
-  if (me == 0 && fp2) fprintf(fp2, " %5d", n_movedall);
+  MPI_Reduce(temp,tempall,3,MPI_DOUBLE,MPI_SUM,0,world);
+  if (me == 0 && fp2) fprintf(fp2, " %5d %7.2f %7.2f %7.2f %7.2f", n_movedall, sqrt(tempall[0]),sqrt(tempall[1])
+      ,sqrt(tempall[2]),sqrt(tempall[0]+tempall[1]+tempall[2]));
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -429,7 +435,7 @@ void MinARTn::metropolis()
 
   if (me == 0 && fp2){
     for (int i = 0; i < 3; ++i) dxcm[i] *= double(atom->natoms);
-    fprintf(fp2, " %12.5f %2d %9.5f %9.5f %9.5f %8.5f\n", ecurrent, acc, dxcm[0], dxcm[1], dxcm[2], drall);
+    fprintf(fp2, " %12.5f %2d %8.5f\n", ecurrent, acc, drall);
     fflush(fp2);
   }
 
@@ -2236,14 +2242,14 @@ void MinARTn::print_info(const int flag)
     }
 
   } else if (flag == 2){
-      fprintf(fp2, "#  1       2        3       4    5     6      7       8      9        10      11        12         13         14         15         16         17       18     19        20        21        22       23\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   nsadl ref  sad   min   center   Eref      Emin     nMove    pxx        pyy        pzz        pxy        pxz         pyz     Efinal   status disp-x    disp-y    disp-z     dr\n");
+      fprintf(fp2, "#  1       2        3       4      5      6      7       8        9   10    11      12      13        14        15         16         17       18     19        20        21        22       23      24\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl sad-dx sad-dy sad-dz  sad-dr    ref  sad   min   center   Eref      Emin     nMove        pxx        pyy      pzz    pxy      pxz       pyz     Efinal   status    dr\n");
       fprintf(fp2, "#-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 3){
-      fprintf(fp2, "#  1       2        3       4    5     6      7    8         9        10     11         12     13       14        15     16       17\n");
-      fprintf(fp2, "#Event   del-E   egv-sad   nsadl ref  sad   min   center   Eref      Emin     nMove  Efinal    status disp-x   disp-y    disp-z   dr\n");
-      fprintf(fp2, "#------------------------------------------------------------------------------------------------------------------------------------\n");
+      fprintf(fp2, "#  1       2        3       4      5      6       7       8       9    10   11      12     13        14        15      16       17    18\n");
+      fprintf(fp2, "#Event   del-E   egv-sad   nsadl sad-dx sad-dy  sad-dz  sad-dr   ref  sad   min   center   Eref      Emin     nMove   Efinal    status dr\n");
+      fprintf(fp2, "#----------------------------------------------------------------------------------------------------------------------------------------\n");
 
   } else if (flag == 10){
     if (fp1){
