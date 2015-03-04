@@ -2067,7 +2067,7 @@ int MinARTn::new_min_perp_fire(int maxiter)
     // if more than DELAYSTEP since v dot f was negative:
     // increase timestep and decrease alpha
     if (vdotfall > 0.) {
-      double tmp_me[2], tmp_all[2];
+      double tmp_me[3], tmp_all[3];
       scale1 = 1. - alpha;
       tmp_me[0] = tmp_me[1] = 0.;
       for (int i = 0; i < nvec; ++i) {
