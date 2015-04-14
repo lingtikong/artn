@@ -20,6 +20,7 @@
 #include "output.h"
 
 #define MAXLINE 512
+//#define DEBUG
 
 #define ZERO  1.e-10
 
@@ -48,12 +49,12 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 {
   random = NULL;
   pressure = NULL;
-  dumpmin = dumpsad = NULL;
+  dumpmin = dumpsad = dumpevent =  NULL;
   egvec = x0tmp = x00 = fperp = NULL;
 
-  fp1 = fp2 = NULL;
+  fp1 = fp2 = fp_sadlpress =  NULL;
   glist = NULL;
-  groupname = flog = fevent = fconfg = NULL;
+  groupname = flog = fevent = fconfg = c_fsadpress = NULL;
 
   char *id_press = new char [13];
   strcpy(id_press,"thermo_press");
@@ -68,6 +69,9 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 
   MPI_Comm_rank(world, &me);
   MPI_Comm_size(world, &np);
+#ifdef DEBUG
+  fprintf(screen, "Leaving constructor(), proc %i", me);fflush(screen);
+#endif
 return;
 }
 
@@ -77,19 +81,33 @@ return;
 int MinARTn::iterate(int maxevent)
 {
   // read in control parameters
+#ifdef DEBUG
+  fprintf(screen, "Entering iterate(), proc %i", me);fflush(screen);
+#endif
   read_control();
+#ifdef DEBUG
+  fprintf(screen, "After read_control, proc %i", me);fflush(screen);
+#endif
   artn_init();
-
+#ifdef DEBUG
+  fprintf(screen, "After initilization, proc %i", me);fflush(screen);
+#endif
   max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
   if (me == 0) print_info(0);
 
+#ifdef DEBUG
+  fprintf(screen, "Before minimization, proc %i", me);
+#endif
   if(!min_fire)stop_condition = min_converge(max_conv_steps,0);
   else stop_condition = min_converge_fire(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
+#ifdef DEBUG
+  fprintf(screen, "After minimization, proc %i", me);
+#endif
   if (me == 0) print_info(1);
   if (flag_press){
     pressure->compute_vector();
@@ -101,11 +119,18 @@ int MinARTn::iterate(int maxevent)
     }
   }
 
+
   // dump the first stable configuration
   if (dumpmin){
     int idum = update->ntimestep;
     update->ntimestep = ref_id;
     dumpmin->write();
+    update->ntimestep = idum;
+  }
+  if (dumpevent){
+    int idum = update->ntimestep;
+    update->ntimestep = sad_id*1000;
+    dumpevent->write();
     update->ntimestep = idum;
   }
 
@@ -320,6 +345,24 @@ void MinARTn::analysis_saddle(){
   MPI_Reduce(temp,tempall,3,MPI_DOUBLE,MPI_SUM,0,world);
   if (me == 0 && fp2) fprintf(fp2, " %5d %7.2f %7.2f %7.2f %7.2f", n_movedall, sqrt(tempall[0]),sqrt(tempall[1])
       ,sqrt(tempall[2]),sqrt(tempall[0]+tempall[1]+tempall[2]));
+  if (flag_sadl_press){
+    double *vvec = atom->v[0];
+    for (int i = 0; i < nvec; ++i) vvec[i] = 0.;
+
+    ++update->ntimestep;
+    pressure->addstep(update->ntimestep);
+    energy_force(0); ++evalf; reset_x00();
+    pressure->compute_vector();
+    double * press = pressure->vector;
+
+
+    if (me == 0 && fp_sadlpress){
+      fprintf(fp_sadlpress, "%i",sad_id);
+      for (int i = 0; i < 6; ++i) fprintf(fp_sadlpress, " %10g", press[i]);
+      fprintf(fp_sadlpress, "\n");
+    }
+  }
+
 }
 
 /* -------------------------------------------------------------------------------------------------
@@ -453,6 +496,7 @@ void MinARTn::set_defaults()
   sad_found = 0;
   max_num_events   = 1000;
   flag_press       = 0;
+  flag_sadl_press  = 0;
   min_fire         = 0;
   events_per_atom  = 0;
 
@@ -505,6 +549,7 @@ void MinARTn::set_defaults()
   print_freq       = 1;
   dump_min_every   = 1;
   dump_sad_every   = 1;
+  dump_event_every = 0;
 
 return;
 }
@@ -516,7 +561,7 @@ void MinARTn::read_control()
 {
   char oneline[MAXLINE], str[MAXLINE], *token1, *token2;
   FILE *fp = fopen("artn.control", "r");
-  char *fmin, *fsad; fmin = fsad = NULL;
+  char *fmin, *fsad, *fproc; fmin = fsad = fproc = NULL;
   if (fp == NULL){
     error->warning(FLERR, "Cannot open ARTn control parameter file. Default parameters will be used.\n");
 
@@ -682,6 +727,11 @@ void MinARTn::read_control()
         fsad = new char [strlen(token2)+1];
         strcpy(fsad, token2);
 
+      } else if (strcmp(token1, "dump_event_config") == 0){
+        if (fproc) delete []fproc;
+        fproc = new char [strlen(token2)+1];
+        strcpy(fproc, token2);
+
       } else if (strcmp(token1, "conv_perp_inc") == 0){
         conv_perp_inc = force->inumeric(FLERR, token2);
 
@@ -693,6 +743,9 @@ void MinARTn::read_control()
 
       } else if (strcmp(token1, "dump_sad_every") == 0){
 	dump_sad_every = force->inumeric(FLERR, token2);
+
+      } else if (strcmp(token1, "dump_event_every") == 0){
+	dump_event_every = force->inumeric(FLERR, token2);
 
       } else if (strcmp(token1, "min_fire") == 0){
 	min_fire = force->inumeric(FLERR, token2);
@@ -714,6 +767,12 @@ void MinARTn::read_control()
 
       } else if (strcmp(token1, "events_per_atom") == 0){
 	events_per_atom = force->inumeric(FLERR, token2);
+
+      } else if (strcmp(token1, "flag_sadl_press") == 0){
+	flag_sadl_press = force->inumeric(FLERR, token2);
+
+      } else if (strcmp(token1, "sadl_press_file") == 0){
+	strcpy(c_fsadpress, token2);
 
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
@@ -741,6 +800,14 @@ void MinARTn::read_control()
     fsad = new char [14];
     strcpy(fsad, "sad.lammpstrj");
   }
+  if (fproc == NULL){
+    fproc = new char [14];
+    strcpy(fproc, "eve.lammpstrj");
+  }
+  if (c_fsadpress == NULL){
+    c_fsadpress = new char [15];
+    strcpy(c_fsadpress, "sadl_press.dat");
+  }
   min_id = ref_0 = ref_id;
 
   // if disp_sad2min_thr not set, set as twice init_step_size
@@ -764,6 +831,13 @@ void MinARTn::read_control()
   masstot = group->mass(groupall);
 
   // open log file and output control parameter info
+  if (me == 0 && flag_sadl_press && strcmp(c_fsadpress, "NULL") != 0){
+    fp_sadlpress = fopen(c_fsadpress, "w");
+    if(fp_sadlpress == NULL){
+      sprintf(str, "Cannot open ARTn sadlpress file: %s for writing", c_fsadpress);
+      error->one(FLERR,str);
+    }
+  }
   if (me == 0 && strcmp(flog, "NULL") != 0){
     fp1 = fopen(flog, "w");
     if (fp1 == NULL){
@@ -776,6 +850,7 @@ void MinARTn::read_control()
     fprintf(fp1, "max_num_events      %-18d  # %s\n", max_num_events,"Max number of events");
     fprintf(fp1, "min_fire            %-18d  # %s\n", min_fire, "use FIRE to do minimization both in push back & push forward");
     fprintf(fp1, "flag_press          %-18d  # %s\n", flag_press, "Flag whether the pressure info will be monitored");
+    fprintf(fp1, "flag_sadl_press     %-18d  # %s\n", flag_press, "Flag whether the sadlle point pressure info will be monitored");
     fprintf(fp1, "random_seed         %-18d  # %s\n", seed, "Seed for random generator");
     fprintf(fp1, "init_config_id      %-18d  # %s\n", min_id, "ID of the initial stable configuration");
     fprintf(fp1, "flag_push_over      %-18d  # %s\n", flag_push_over, "Flag whether to push over saddle to find another minimum");
@@ -820,12 +895,15 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# Output related parameters\n");
     fprintf(fp1, "log_file            %-18s  # %s\n", flog, "File to write ARTn log info; NULL to skip");
     fprintf(fp1, "log_level           %-18d  # %s\n", log_level, "Level of ARTn log ouput: 1, high; 0, low.");
+    fprintf(fp1, "sadl_press_file     %-18s  # %s\n", c_fsadpress, "File to write ARTn sadl pressure info; NULL to skip");
     fprintf(fp1, "print_freq          %-18d  # %s\n", print_freq, "Print ARTn log ouput frequency, if log_level is 1.");
     fprintf(fp1, "event_list_file     %-18s  # %s\n", fevent, "File to record the event info; NULL to skip");
     fprintf(fp1, "dump_min_config     %-18s  # %s\n", fmin, "File for atomic dump of stable configurations; NULL to skip");
     fprintf(fp1, "dump_sad_config     %-18s  # %s\n", fsad, "file for atomic dump of saddle configurations; NULL to skip");
+    fprintf(fp1, "dump_event_config   %-18s  # %s\n", fproc, "file for atomic dump of event configurations; NULL to skip");
     fprintf(fp1, "dump_min_every      %-18d  # %s\n", dump_min_every, "Dump min configuration every # step (if 0, no dump)");
     fprintf(fp1, "dump_sad_every      %-18d  # %s\n", dump_sad_every, "Dump sad configuration every # step (if 0, no dump)");
+    fprintf(fp1, "dump_event_every    %-18d  # %s\n", dump_event_every, "Dump event process configuration every # step (if 0, no dump)");
     fprintf(fp1, "#====================================================================================================\n");
   }
 
@@ -839,7 +917,7 @@ void MinARTn::read_control()
 
   // open dump files
   char **tmp;
-  memory->create(tmp, 5, MAX(MAX(10,strlen(fmin)+1),strlen(fsad)+1), "ARTn string");
+  memory->create(tmp, 5, MAX(MAX(10,strlen(fmin)+1),MAX(strlen(fsad)+1,strlen(fproc)+1)), "ARTn string");
 
   if (strcmp(fmin, "NULL") != 0){
     strcpy(tmp[0],"ARTnmin");
@@ -859,10 +937,20 @@ void MinARTn::read_control()
     if(dump_sad_every) dumpsad = new DumpAtom(lmp, 5, tmp);
   }
 
+  if (strcmp(fproc, "NULL") != 0){
+    strcpy(tmp[0],"ARTneve");
+    strcpy(tmp[1],"all");
+    strcpy(tmp[2],"atom");
+    strcpy(tmp[3],"1");
+    strcpy(tmp[4],fproc);
+    if(dump_event_every) dumpevent = new DumpAtom(lmp, 5, tmp);
+  }
+
   memory->destroy(tmp);
 
   delete []fmin;
   delete []fsad;
+  delete []fproc;
 
 return;
 }
@@ -915,6 +1003,7 @@ void MinARTn::artn_init()
 
   if (dumpmin) dumpmin->init();
   if (dumpsad) dumpsad->init();
+  if (dumpevent) dumpevent->init();
 
 return;
 }
@@ -1026,6 +1115,13 @@ int MinARTn::find_saddle( )
     MPI_Allreduce(&fpar2, &fpar2all,1,MPI_DOUBLE,MPI_SUM,world);
     
     delE = ecurrent-eref;
+    if (dumpevent && (it%dump_event_every == 0)){
+      int idum = update->ntimestep;
+      update->ntimestep = 1000*sad_id+it;
+      dumpevent->write();
+      update->ntimestep = idum;
+    }
+
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       ftot   = sqrt(ftotall);
@@ -1154,6 +1250,13 @@ int MinARTn::find_saddle( )
     MPI_Reduce(&fperp2, &fperp2all,1,MPI_DOUBLE,MPI_SUM,0,world);
   
     delE = ecurrent - eref;
+    if (dumpevent && (it_s%dump_event_every == 0)){
+      int idum = update->ntimestep;
+      update->ntimestep = 1000*sad_id+100+it_s;
+      dumpevent->write();
+      update->ntimestep = idum;
+    }
+
     if (me == 0){
       fperp2 = sqrt(fperp2all);
       if (fp1 && log_level && it_s%print_freq==0) fprintf(fp1, "%8d %10.5f %3d %3d %5d %10.5f %10.5f %10.5f %8.4f %8.4f %6.3f " BIGINT_FORMAT "\n",
@@ -2206,6 +2309,8 @@ void MinARTn::artn_final()
     }
   }
 
+  if (fp_sadlpress) fclose(fp_sadlpress);
+
   if (flog)   delete [] flog;
   if (fevent) delete [] fevent;
   if (fconfg) delete [] fconfg;
@@ -2216,6 +2321,7 @@ void MinARTn::artn_final()
   if (random)  delete random;
   if (dumpmin) delete dumpmin;
   if (dumpsad) delete dumpsad;
+  if (dumpevent) delete dumpevent;
 
 return;
 }
