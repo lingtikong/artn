@@ -51,6 +51,7 @@ private:
   int ref_id, min_id, sad_id, ref_0;
   DumpAtom * dumpmin;
   DumpAtom * dumpsad;
+  DumpAtom * dumpevent;
   Compute *pressure;
 
   int me, np;
@@ -88,6 +89,7 @@ private:
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
   double max_ener_tol;     // energy tolerance 
   int flag_press;          // Pressure will be calculated.
+  int flag_sadl_press;          // Saddle point's pressure will be calculated.
   double atom_disp_thr;    // threshold to identify whether an atom is displaced or not
 
   int groupbit, ngroup;    // group bit & # of atoms for initial kick
@@ -124,12 +126,13 @@ private:
   int    conv_perp_inc;
 
   // for output
-  FILE *fp1, *fp2;
-  char *flog, *fevent, *fconfg;
+  FILE *fp1, *fp2, *fp_sadlpress;
+  char *flog, *fevent, *fconfg, *c_fsadpress;
   int log_level;           // 1, all; 0, main
   int print_freq;          // default 1
   int dump_min_every;      // dump min configuration every # step
   int dump_sad_every;      // dump sadl configuration every # step
+  int dump_event_every;
   int idum;
   double ddum;
 
