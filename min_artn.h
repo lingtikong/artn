@@ -26,6 +26,7 @@ private:
   void read_control();
 
   void random_kick();
+  void read_dump_direction(char *dumpfile, double *delpos); 	// allocate direction outside the function
 
   int find_saddle();
   int new_find_saddle();
@@ -89,7 +90,7 @@ private:
   double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
   double max_ener_tol;     // energy tolerance 
   int flag_press;          // Pressure will be calculated.
-  int flag_sadl_press;          // Saddle point's pressure will be calculated.
+  int flag_sadl_press;     // Saddle point's pressure will be calculated.
   double atom_disp_thr;    // threshold to identify whether an atom is displaced or not
 
   int groupbit, ngroup;    // group bit & # of atoms for initial kick
@@ -98,6 +99,7 @@ private:
   double cluster_radius;   // radius for kick; <0, all; ==0, single; >0, cluster
 
   // for harmonic well
+  int flag_dump_direction; // use dump direction file as the initial kick direction
   double init_step_size;   // Size of initial displacement
   double basin_factor;     // Factor multiplying Increment_Size for leaving the basin
   int max_perp_move_h;     // Maximum number of perpendicular steps leaving basin
@@ -127,7 +129,7 @@ private:
 
   // for output
   FILE *fp1, *fp2, *fp_sadlpress;
-  char *flog, *fevent, *fconfg, *c_fsadpress;
+  char *flog, *fevent, *fconfg, *c_fsadpress, *fdump_direction;
   int log_level;           // 1, all; 0, main
   int print_freq;          // default 1
   int dump_min_every;      // dump min configuration every # step
