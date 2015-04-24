@@ -4,6 +4,7 @@
 #include "min_artn.h"
 #include "atom.h"
 #include "domain.h"
+#include "input.h"
 #include "update.h"
 #include "timer.h"
 #include "error.h"
@@ -20,7 +21,7 @@
 #include "output.h"
 
 #define MAXLINE 512
-//#define DEBUG
+#define DEBUG
 
 #define ZERO  1.e-10
 
@@ -54,7 +55,7 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 
   fp1 = fp2 = fp_sadlpress =  NULL;
   glist = NULL;
-  groupname = flog = fevent = fconfg = c_fsadpress = NULL;
+  groupname = flog = fevent = fconfg = c_fsadpress = fdump_direction = NULL;
 
   char *id_press = new char [13];
   strcpy(id_press,"thermo_press");
@@ -69,9 +70,6 @@ MinARTn::MinARTn(LAMMPS *lmp): MinLineSearch(lmp)
 
   MPI_Comm_rank(world, &me);
   MPI_Comm_size(world, &np);
-#ifdef DEBUG
-  fprintf(screen, "Leaving constructor(), proc %i", me);fflush(screen);
-#endif
 return;
 }
 
@@ -81,33 +79,18 @@ return;
 int MinARTn::iterate(int maxevent)
 {
   // read in control parameters
-#ifdef DEBUG
-  fprintf(screen, "Entering iterate(), proc %i", me);fflush(screen);
-#endif
   read_control();
-#ifdef DEBUG
-  fprintf(screen, "After read_control, proc %i", me);fflush(screen);
-#endif
   artn_init();
-#ifdef DEBUG
-  fprintf(screen, "After initilization, proc %i", me);fflush(screen);
-#endif
   max_conv_steps = update->nsteps;
 
   // minimize before searching saddle points.
   if (me == 0) print_info(0);
 
-#ifdef DEBUG
-  fprintf(screen, "Before minimization, proc %i", me);
-#endif
   if(!min_fire)stop_condition = min_converge(max_conv_steps,0);
   else stop_condition = min_converge_fire(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
 
-#ifdef DEBUG
-  fprintf(screen, "After minimization, proc %i", me);
-#endif
   if (me == 0) print_info(1);
   if (flag_press){
     pressure->compute_vector();
@@ -374,6 +357,13 @@ void MinARTn::push_down()
 
   for (int i = 0; i < nvec; ++i) xvec[i] += fperp[i];
 
+  if (dumpevent){
+    int idum = update->ntimestep;
+    update->ntimestep = 1000*sad_id+500;
+    dumpevent->write();
+    update->ntimestep = idum;
+  }
+
   ecurrent = energy_force(1); ++evalf;
   if (me == 0) print_info(50);
 
@@ -511,6 +501,7 @@ void MinARTn::set_defaults()
   increment_size   = 0.09;
   force_th_perp_h  = 0.5;
   eigen_th_well    = -0.01;
+  flag_dump_direction = 0;
 
   // activation, converge to saddle
   max_activat_iter  = 100;
@@ -772,7 +763,17 @@ void MinARTn::read_control()
 	flag_sadl_press = force->inumeric(FLERR, token2);
 
       } else if (strcmp(token1, "sadl_press_file") == 0){
-	strcpy(c_fsadpress, token2);
+        if (c_fsadpress) delete []c_fsadpress;
+        c_fsadpress = new char [strlen(token2)+1];
+        strcpy(c_fsadpress, token2);
+
+      } else if (strcmp(token1, "fdump_direction") == 0){
+        if (fdump_direction) delete []fdump_direction;
+        fdump_direction = new char [strlen(token2)+1];
+	strcpy(fdump_direction, token2);
+
+      } else if (strcmp(token1, "flag_dump_direction") == 0){
+	flag_dump_direction = force->inumeric(FLERR, token2);
 
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
@@ -857,6 +858,7 @@ void MinARTn::read_control()
     fprintf(fp1, "events_per_atom     %-18d  # %s\n", events_per_atom, "Find designed events per atom, set to 0 to shutoff this method");
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
+    fprintf(fp1, "flag_dump_direction %-18d  # %s\n", flag_dump_direction, "Use dump direction file as the initial kick direction");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
     fprintf(fp1, "init_step_size      %-18g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
     fprintf(fp1, "basin_factor        %-18g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
@@ -1026,6 +1028,7 @@ return;
 ------------------------------------------------------------------------------------------------- */
 int MinARTn::find_saddle( )
 {
+  
   int flag = 0;
   int nlanc = 0;
   double ftot = 0., ftotall, fpar2 = 0.,fpar2all = 0., fperp2 = 0., fperp2all = 0.,  delr;
@@ -1049,7 +1052,12 @@ int MinARTn::find_saddle( )
 
   // randomly displace the desired atoms: activation
   random_kick();
-
+  if (dumpevent){
+    int idum = update->ntimestep;
+    update->ntimestep = 1000*sad_id+900;
+    dumpevent->write();
+    update->ntimestep = idum;
+  }
   if (me == 0) print_info(10);
 
   int nmax_perp = max_perp_move_h;
@@ -1591,12 +1599,37 @@ void MinARTn::random_kick()
   double *delpos = fix_minimize->request_vector(4);
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   int nlocal = atom->nlocal;
+  int natoms = atom->natoms;
   int *tag   = atom->tag;
   int nhit = 0;
 
 
 
-  if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
+  if (flag_dump_direction){
+    read_dump_direction(fdump_direction,delpos);
+    nhit = 1;
+#ifdef DEBUG
+    double dx, dy, dz;
+    double tmp[3],tmpall[3];
+    dx = dy = dz = 0.0;
+    for (int i = 0; i < nlocal; ++i){
+      dx += delpos[i*3];
+      dy += delpos[i*3+1];
+      dz += delpos[i*3+2];
+    }
+    tmp[0] = dx; tmp[1] = dy; tmp[2] = dz;
+    MPI_Allreduce(tmp, tmpall, 3, MPI_DOUBLE, MPI_SUM, world);
+    if(me == 0)fprintf(screen, "\n dx = %f, dy = %f, dz = %f \n", tmpall[0], tmpall[1] ,tmpall[2]);
+    dx = tmpall[0] / natoms;
+    dy = tmpall[1] / natoms;
+    dz = tmpall[2] / natoms;
+    for (int i = 0; i < nlocal; ++i){
+      delpos[i*3] -= dx;
+      delpos[i*3+1] -= dy;
+      delpos[i*3+2] -= dz;
+    }
+#endif
+  } else if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
     for (int i = 0; i < nlocal; ++i){
       if (tag[i] == that){
         int n = 3*i;
@@ -1649,6 +1682,27 @@ void MinARTn::random_kick()
       }
       //}
     }
+  }
+
+  // minus x,y,z drift
+  double dx, dy, dz;
+  double tmp[3],tmpall[3];
+  dx = dy = dz = 0.0;
+  for (int i = 0; i < nlocal; ++i){
+    dx += delpos[i*3];
+    dy += delpos[i*3+1];
+    dz += delpos[i*3+2];
+  }
+  tmp[0] = dx; tmp[1] = dy; tmp[2] = dz;
+  MPI_Allreduce(tmp, tmpall, 3, MPI_DOUBLE, MPI_SUM, world);
+  if(me == 0)fprintf(screen, "\n dx = %f, dy = %f, dz = %f \n", tmpall[0], tmpall[1] ,tmpall[2]);
+  dx = tmpall[0] / natoms;
+  dy = tmpall[1] / natoms;
+  dz = tmpall[2] / natoms;
+  for (int i = 0; i < nlocal; ++i){
+    delpos[i*3] -= dx;
+    delpos[i*3+1] -= dy;
+    delpos[i*3+2] -= dz;
   }
 
   MPI_Reduce(&nhit,&idum,1,MPI_INT,MPI_SUM,0,world);
@@ -2800,4 +2854,82 @@ int MinARTn::min_converge_fire(int maxiter){
 
   return MAXITER;
 
+}
+
+/*-------------------------------------------------------------------
+ *  read displacement for initial kick
+ *  @file: the dump direction file to open, native and orthogonal 
+ *  coordinate format suported.
+ *  @delpos: displacement vector (3*nlocal element)
+ *  Important: atom_modify map hash/array shoud be used in lammps input
+ *  script.
+ * ----------------------------------------------------------------*/
+void MinARTn::read_dump_direction(char * file, double * delpos){
+  FILE * fp;
+  char str[MAXLINE], oneline[MAXLINE], *token;
+  int flag_scale = 0;
+  int id,type,ilocal;
+  bigint natoms; 
+  double * dumppos;
+  double lox,hix,loy,hiy,loz,hiz,lx,ly,lz;
+  lox = hix = loy = hiy = loz = lx = ly = lz = 0.0;
+  if (file == NULL){
+    error->one(FLERR,"Dump direction file not set.");
+    return;
+  }
+  if (me == 0){
+    fp = fopen(file,"r"); 	// open file
+    if (fp == NULL){
+       sprintf(str, "Cannot open ARTn dump direction file: %s for reading", file);
+       error->one(FLERR,str);
+    }
+    for(int i = 0;i < 3;++i)fgets(oneline,MAXLINE,fp);
+    fgets(oneline,MAXLINE,fp);
+    sscanf(oneline,BIGINT_FORMAT,&natoms);
+  }
+  MPI_Bcast(&natoms, 1, MPI_DOUBLE,0,world);
+  dumppos = new double [3*natoms+3];
+  if (me == 0){
+    fgets(oneline,MAXLINE,fp);
+    fgets(oneline,MAXLINE,fp);
+    sscanf(oneline,"%lg %lg",&lox,&hix);
+    lx = hix - lox;
+    fgets(oneline,MAXLINE,fp);
+    sscanf(oneline,"%lg %lg",&loy,&hiy);
+    ly = hiy - loy;
+    fgets(oneline,MAXLINE,fp);
+    sscanf(oneline,"%lg %lg",&loz,&hiz);
+    lz = hiz - loz;
+    fgets(oneline,MAXLINE,fp);
+    if (oneline[strlen("ITEM: ATOMS id type x")] == 's') flag_scale = 1;
+    for (bigint i = 0; i < natoms; ++i){
+      fgets(oneline,MAXLINE,fp);
+      sscanf(oneline,"%i %i", &id, &type);
+      sscanf(oneline,"%i %i %lg %lg %lg", &id, &type, dumppos+(3*id), dumppos+(3*id)+1,dumppos+(3*id)+2);
+      if (flag_scale){
+	dumppos[3*id]   = dumppos[3*id] * lx + lox;
+	dumppos[3*id+1] = dumppos[3*id+1] * ly + loy;
+	dumppos[3*id+2] = dumppos[3*id+2] * lz + loz;
+      }
+    }
+  }
+  MPI_Bcast(dumppos,3*natoms+3, MPI_DOUBLE,0,world);
+  double dx,dy,dz;
+  int nlocal = atom->nlocal;
+  xvec = atom->x[0];
+  for (bigint i = 1; i <= natoms; ++i){
+    ilocal = atom->map(i);
+    if (ilocal >= 0 && ilocal < nlocal){
+      int n = ilocal*3;
+      dx = dumppos[i*3] - xvec[n];
+      dy = dumppos[i*3+1] - xvec[n+1];
+      dz = dumppos[i*3+2] - xvec[n+2];
+      domain->minimum_image(dx, dy, dz);
+      delpos[n] = dx;
+      delpos[n+1] = dy;
+      delpos[n+2] = dz;
+    }
+  }
+  if (dumppos) delete []dumppos;
+  if (me == 0) fclose(fp);
 }
