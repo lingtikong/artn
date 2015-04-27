@@ -100,6 +100,7 @@ private:
 
   // for harmonic well
   int flag_dump_direction; // use dump direction file as the initial kick direction
+  double dump_direction_random_factor; // add a random disturbation to the dump direction.
   double init_step_size;   // Size of initial displacement
   double basin_factor;     // Factor multiplying Increment_Size for leaving the basin
   int max_perp_move_h;     // Maximum number of perpendicular steps leaving basin

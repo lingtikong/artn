@@ -129,6 +129,7 @@ int MinARTn::iterate(int maxevent)
     }
   }
 
+
   // main loop of ARTn
   int ievent = 0;
 
@@ -502,6 +503,7 @@ void MinARTn::set_defaults()
   force_th_perp_h  = 0.5;
   eigen_th_well    = -0.01;
   flag_dump_direction = 0;
+  dump_direction_random_factor = 0.0;
 
   // activation, converge to saddle
   max_activat_iter  = 100;
@@ -775,6 +777,9 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "flag_dump_direction") == 0){
 	flag_dump_direction = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "dump_direction_random_factor") == 0){
+	dump_direction_random_factor = force->numeric(FLERR, token2);
+
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
         error->all(FLERR, str);
@@ -859,6 +864,7 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "flag_dump_direction %-18d  # %s\n", flag_dump_direction, "Use dump direction file as the initial kick direction");
+    fprintf(fp1, "dump_direction_random_factor %-18g  # %s\n", dump_direction_random_factor, "Norm of the initial displacement (activation)");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
     fprintf(fp1, "init_step_size      %-18g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
     fprintf(fp1, "basin_factor        %-18g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
@@ -1597,6 +1603,7 @@ void MinARTn::random_kick()
   double cord[3];
 
   double *delpos = fix_minimize->request_vector(4);
+  double *tmpdelpos = fix_minimize->request_vector(6);
   for (int i = 0; i < nvec; ++i) delpos[i] = 0.;
   int nlocal = atom->nlocal;
   int natoms = atom->natoms;
@@ -1606,30 +1613,9 @@ void MinARTn::random_kick()
 
 
   if (flag_dump_direction){
-    read_dump_direction(fdump_direction,delpos);
-    nhit = 1;
-#ifdef DEBUG
-    double dx, dy, dz;
-    double tmp[3],tmpall[3];
-    dx = dy = dz = 0.0;
-    for (int i = 0; i < nlocal; ++i){
-      dx += delpos[i*3];
-      dy += delpos[i*3+1];
-      dz += delpos[i*3+2];
-    }
-    tmp[0] = dx; tmp[1] = dy; tmp[2] = dz;
-    MPI_Allreduce(tmp, tmpall, 3, MPI_DOUBLE, MPI_SUM, world);
-    if(me == 0)fprintf(screen, "\n dx = %f, dy = %f, dz = %f \n", tmpall[0], tmpall[1] ,tmpall[2]);
-    dx = tmpall[0] / natoms;
-    dy = tmpall[1] / natoms;
-    dz = tmpall[2] / natoms;
-    for (int i = 0; i < nlocal; ++i){
-      delpos[i*3] -= dx;
-      delpos[i*3+1] -= dy;
-      delpos[i*3+2] -= dz;
-    }
-#endif
-  } else if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
+    read_dump_direction(fdump_direction,tmpdelpos);
+  }
+  if (fabs(cluster_radius) < ZERO){ // only the cord atom will be kicked
     for (int i = 0; i < nlocal; ++i){
       if (tag[i] == that){
         int n = 3*i;
@@ -1683,6 +1669,9 @@ void MinARTn::random_kick()
       //}
     }
   }
+  for (int i = 0; i < 3*nlocal; ++i){
+    delpos[i] = delpos[i] * dump_direction_random_factor + ( 1 - dump_direction_random_factor) * tmpdelpos[i];
+  }
 
   // minus x,y,z drift
   double dx, dy, dz;
@@ -1695,7 +1684,7 @@ void MinARTn::random_kick()
   }
   tmp[0] = dx; tmp[1] = dy; tmp[2] = dz;
   MPI_Allreduce(tmp, tmpall, 3, MPI_DOUBLE, MPI_SUM, world);
-  if(me == 0)fprintf(screen, "\n dx = %f, dy = %f, dz = %f \n", tmpall[0], tmpall[1] ,tmpall[2]);
+  //if(me == 0)fprintf(screen, "\n dx = %f, dy = %f, dz = %f \n", tmpall[0], tmpall[1] ,tmpall[2]);
   dx = tmpall[0] / natoms;
   dy = tmpall[1] / natoms;
   dz = tmpall[2] / natoms;
