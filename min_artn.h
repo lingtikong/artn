@@ -112,6 +112,7 @@ private:
   // for lanczos
   int num_lancz_vec_h;     // Number of vectors included in lanczos procedure in the Harmonic well
   int num_lancz_vec_c;     // Number of vectors included in lanczos procedure in convergence
+  int min_lancz_iteration; // min number of lanczos iterations (must >=3), sometimes in lattice system, the eigenvalue may converge to zero
   double del_disp_lancz;   // Step of the numerical derivative of forces in lanczos
   double eigen_th_lancz;   // Eigen_threhold for lanczos convergence
 

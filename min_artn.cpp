@@ -534,6 +534,7 @@ void MinARTn::set_defaults()
   // for lanczos
   num_lancz_vec_h  = 30;
   num_lancz_vec_c  = 20;
+  min_lancz_iteration = 3;
   del_disp_lancz   = 0.001;
   eigen_th_lancz   = 0.01;
 
@@ -777,6 +778,12 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "flag_dump_direction") == 0){
 	flag_dump_direction = force->inumeric(FLERR, token2);
 
+      } else if (strcmp(token1, "min_lancz_iteration") == 0){
+	min_lancz_iteration = force->inumeric(FLERR, token2);
+	if(min_lancz_iteration < 3) {
+	  error->all(FLERR, "ARTn: min_lancz_iteration must not be less than 3.");
+	}
+
       } else if (strcmp(token1, "dump_direction_random_factor") == 0){
 	dump_direction_random_factor = force->numeric(FLERR, token2);
 
@@ -895,6 +902,7 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# Lanczos related parameters\n");
     fprintf(fp1, "num_lancz_vec_h     %-18d  # %s\n", num_lancz_vec_h, "Num of vectors included in Lanczos for escaping well");
     fprintf(fp1, "num_lancz_vec_c     %-18d  # %s\n", num_lancz_vec_c, "Num of vectors included in Lanczos for convergence");
+    fprintf(fp1, "min_lancz_iteration %-18d  # %s\n", num_lancz_vec_c, "Minimum iterations number of lanczos (must >= 3)");
     fprintf(fp1, "del_disp_lancz      %-18g  # %s\n", del_disp_lancz, "Step of the numerical derivative of forces in Lanczos");
     fprintf(fp1, "eigen_th_lancz      %-18g  # %s\n", eigen_th_lancz, "Eigenvalue threshold for Lanczos convergence");
     fprintf(fp1, "\n# Metropolis\n");
@@ -1920,7 +1928,7 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
 
       eigen1 = eigen2; eigen2 = d_bak[0];
     }
-    if (n >= 3 && fabs((eigen2-eigen1)/eigen1) < eigen_th_lancz) {
+    if (n >= min_lancz_iteration && fabs((eigen2-eigen1)/eigen1) < eigen_th_lancz) {
       con_flag = 1;
       for (int i = 0; i < nvec; ++i){
 	     xvec[i] = x0tmp[i];
