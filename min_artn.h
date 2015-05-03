@@ -87,7 +87,7 @@ private:
   int flag_push_back;      // if 1, will push back saddle point to check if it connect with the minimum
   int flag_push_over;      // if 1, wiil push over saddle point to reach another minimum
   int flag_relax_sad;      // further relax to the newly found saddle
-  double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref
+  double max_disp_tol;     // tolerance displacement between ref and push-back that can claim saddle is indeed linked to ref (negative value corresponds to the max atom displacement)
   double max_ener_tol;     // energy tolerance 
   int flag_press;          // Pressure will be calculated.
   int flag_sadl_press;     // Saddle point's pressure will be calculated.
@@ -138,6 +138,7 @@ private:
   int dump_event_every;
   int idum;
   double ddum;
+  double tmpddum;
 
   void artn_final();
   void print_info(const int);
