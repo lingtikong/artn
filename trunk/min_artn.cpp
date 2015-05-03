@@ -274,24 +274,43 @@ int MinARTn::push_back_sad()
   dxcm[2] = com[2] - com0[2];
 
   double dr = 0., drall;
-  for (int i = 0; i < nvec; i++){
-    double dx = xvec[i] - x00[i] - dxcm[i%3];
+  double drmaxone = 0., drmaxall, dx, dy, dz;
+  int nlocal = atom->nlocal;
+  for (int i = 0; i < nlocal; ++i){
+    dx = xvec[i*3] - x00[i*3] - dxcm[0];
+    dy = xvec[i*3+1] - x00[i*3+1] - dxcm[1];
+    dz = xvec[i*3+2] - x00[i*3+2] - dxcm[2];
+    // get one atom displacement
+    double tmp = dx*dx + dy*dy + dz*dz;
+    if (tmp > drmaxone) drmaxone = tmp;
     dr += dx * dx;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
+  MPI_Allreduce(&drmaxone,&drmaxall,1,MPI_DOUBLE,MPI_MAX,world);
+
   ddum = sqrt(drall);
+  tmpddum = drmaxall = sqrt(drmaxall);
 
-  if (ddum < max_disp_tol) {
-    if (me == 0) print_info(33);
-
-    for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
-    return 1;
-
+  if (max_disp_tol > 0){
+    if (ddum < max_disp_tol ) {
+      if (me == 0) print_info(33);
+      for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
+      return 1;
+    } else {
+      if (me == 0) print_info(34);
+      for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+    }
   } else {
-
-    if (me == 0) print_info(34);
-    for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+    if (drmaxall < fabs(max_disp_tol)) {
+      if (me == 0) print_info(33);
+      for (int i = 0; i < nvec; ++i) xvec[i] = x0tmp[i];
+      return 1;
+    }else {
+      if (me == 0) print_info(34);
+      for (int i = 0; i < nvec; ++i) xvec[i] = x00[i];
+    }
   }
+
 
 return 0;
 }
@@ -682,7 +701,6 @@ void MinARTn::read_control()
 
       } else if (!strcmp(token1, "max_disp_tol")){
         max_disp_tol = force->numeric(FLERR, token2);
-        if (max_disp_tol <= 0.) error->all(FLERR, "ARTn: max_disp_tol must be greater than 0.");
 
       } else if (!strcmp(token1, "max_ener_tol")){
         max_ener_tol = force->numeric(FLERR, token2);
@@ -1974,6 +1992,10 @@ int MinARTn::lanczos(bool egvec_exist, int flag, int maxvec){
     }
   }
 
+  //if (fabs(egval - 0.0) < 1e-4) {
+  //  flag_egvec = 0;
+  //}
+
   delete []d;
   delete []e;
   delete []d_bak;
@@ -2532,12 +2554,12 @@ void MinARTn::print_info(const int flag)
     if (screen) fprintf(screen, "  Stage %d failed, |Ecurrent - Eref| = %g > %g, reject the new saddle.\n", stage, ddum, max_ener_tol);
 
   } else if (flag == 33){
-    if (fp1) fprintf(fp1, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, ddum, max_disp_tol);
-    if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g < %g, accept the new saddle.\n", stage, ddum, max_disp_tol);
+    if (fp1) fprintf(fp1, "  Stage %d succeeded, dr = %g, drmax_atom = %g, tolerance = %g, accept the new saddle.\n", stage, ddum, tmpddum, max_disp_tol);
+    if (screen) fprintf(screen, "  Stage %d succeeded, dr = %g, drmax_atom = %g, tolerance = %g, accept the new saddle.\n", stage, ddum, tmpddum, max_disp_tol);
 
   } else if (flag == 34){
-    if (fp1) fprintf(fp1, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, ddum, max_disp_tol);
-    if (screen) fprintf(screen, "  Stage %d failed, dr = %g >= %g, reject the new saddle.\n", stage, ddum, max_disp_tol);
+    if (fp1) fprintf(fp1, "  Stage %d failed, dr = %g, drmax_atom = %g, tolerance = %g, reject the new saddle.\n", stage, ddum, tmpddum, max_disp_tol);
+    if (screen) fprintf(screen, "  Stage %d failed, dr = %g, drmax_atom = %g, tolerance = %g, reject the new saddle.\n", stage, ddum, tmpddum, max_disp_tol);
 
   } else if (flag == 40){
     if (fp1) fprintf(fp1, "  Stage %d, further relax the newly found sad-%d ...\n", stage, sad_id);
