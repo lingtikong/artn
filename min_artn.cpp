@@ -283,7 +283,7 @@ int MinARTn::push_back_sad()
     // get one atom displacement
     double tmp = dx*dx + dy*dy + dz*dz;
     if (tmp > drmaxone) drmaxone = tmp;
-    dr += dx * dx;
+    dr += tmp;
   }
   MPI_Allreduce(&dr,&drall,1,MPI_DOUBLE,MPI_SUM,world);
   MPI_Allreduce(&drmaxone,&drmaxall,1,MPI_DOUBLE,MPI_MAX,world);
