@@ -673,7 +673,7 @@ void MinARTn::read_control()
 
       } else if (strcmp(token1, "push_over_saddle") == 0){
         push_over_saddle = force->numeric(FLERR, token2);
-        if (push_over_saddle <=  0.) error->all(FLERR, "ARTn: push_over_saddle must be greater than 0.");
+        //if (push_over_saddle <=  0.) error->all(FLERR, "ARTn: push_over_saddle must be greater than 0.");
 
       } else if (strcmp(token1, "eigen_th_fail") == 0){
         eigen_th_fail = force->numeric(FLERR, token2);
