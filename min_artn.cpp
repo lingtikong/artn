@@ -1,27 +1,28 @@
 /* -------------------------------------------------------------------------------------------------
  * ARTn: Activation Relaxation Technique nouveau
+ * Bin Xu, xubinrun@gmail.com; Lingti Kong, konglt@gmail.com
 ------------------------------------------------------------------------------------------------- */
-#include "min_artn.h"
+
 #include "atom.h"
+#include "compute.h"
 #include "domain.h"
-#include "input.h"
-#include "update.h"
-#include "timer.h"
 #include "error.h"
-#include "modify.h"
 #include "fix_minimize.h"
+#include "force.h"
+#include "group.h"
+#include "input.h"
+#include "math.h"
 #include "memory.h"
+#include "min_artn.h"
+#include "modify.h"
+#include "output.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
-#include "compute.h"
-#include "force.h"
-#include "group.h"
-#include "math.h"
-#include "output.h"
-
+#include "timer.h"
+#include "update.h"
 #define MAXLINE 512
-#define DEBUG
+//#define DEBUG
 
 #define ZERO  1.e-10
 
@@ -90,11 +91,16 @@ int MinARTn::iterate(int maxevent)
   else stop_condition = min_converge_fire(max_conv_steps); evalf += neval;
   eref = ecurrent;
   stopstr = stopstrings(stop_condition);
+  ddum = sqrt(fnorm_sqr());
 
   if (me == 0) print_info(1);
   if (flag_press){
+    ++update->ntimestep;
+    pressure->addstep(update->ntimestep);
+    energy_force(0); ++evalf; reset_x00();
     pressure->compute_vector();
     double * press = pressure->vector;
+    --update->ntimestep;
     if (me == 0 && fp1){
       fprintf(fp1, "  - Pressure tensor           :");
       for (int ii = 0; ii < 6; ++ii) fprintf(fp1, " %g", press[ii]);
@@ -254,6 +260,7 @@ int MinARTn::push_back_sad()
   evalf += neval;
   stopstr = stopstrings(stop_condition); artn_reset_vec();
   reset_coords();
+  ddum = sqrt(fnorm_sqr());
 
   // output minimization information
   if (me == 0) print_info(31);
@@ -357,6 +364,7 @@ void MinARTn::analysis_saddle(){
     energy_force(0); ++evalf; reset_x00();
     pressure->compute_vector();
     double * press = pressure->vector;
+    --update->ntimestep;
 
 
     if (me == 0 && fp_sadlpress){
@@ -394,6 +402,7 @@ void MinARTn::push_down()
   stopstr = stopstrings(stop_condition);
   artn_reset_vec();
   reset_x00();
+  ddum = sqrt(fnorm_sqr());
 
   // output minimization information
   if (me == 0) print_info(51);
@@ -459,6 +468,7 @@ void MinARTn::metropolis()
     pressure->addstep(update->ntimestep);
     energy_force(0); ++evalf; reset_x00();
     pressure->compute_vector();
+    --update->ntimestep;
     double * press = pressure->vector;
 
     if (me == 0 && fp2) for (int i = 0; i < 6; ++i) fprintf(fp2, " %10g", press[i]);
@@ -1629,7 +1639,6 @@ void MinARTn::random_kick()
   int nhit = 0;
 
 
-
   if (flag_dump_direction){
     read_dump_direction(fdump_direction,tmpdelpos);
   }
@@ -1687,8 +1696,10 @@ void MinARTn::random_kick()
       //}
     }
   }
-  for (int i = 0; i < 3*nlocal; ++i){
-    delpos[i] = delpos[i] * dump_direction_random_factor + ( 1 - dump_direction_random_factor) * tmpdelpos[i];
+  if (flag_dump_direction){
+    for (int i = 0; i < 3*nlocal; ++i){
+      delpos[i] = delpos[i] * dump_direction_random_factor + ( 1 - dump_direction_random_factor) * tmpdelpos[i];
+    }
   }
 
   // minus x,y,z drift
@@ -1737,6 +1748,7 @@ int MinARTn::min_converge(int maxiter, const int flag)
 {
   neval = 0;
   int i,fail;
+  int ntimestep;
   double beta,gg,dot[2],dotall[2];
 
   // nlimit = max # of CG iterations before restarting
@@ -1753,7 +1765,7 @@ int MinARTn::min_converge(int maxiter, const int flag)
 
   niter = 0;
   for (int iter = 0; iter < maxiter; ++iter) {
-
+    ntimestep = ++update->ntimestep;
     ++niter;
 
     // line minimization along direction h from current atom->x
@@ -1806,6 +1818,12 @@ int MinARTn::min_converge(int maxiter, const int flag)
     if (dotall[0] <= 0.) for (i = 0; i < nvec; ++i) h[i] = g[i];
     if (flag == 2) reset_coords();
     else if (flag == 1) reset_x00();
+    // output for thermo, dump, restart files
+    if (output->next == ntimestep) {
+      timer->stamp();
+      output->write(ntimestep);
+      timer->stamp(TIME_OUTPUT);
+    }
   }
 
 return MAXITER;
@@ -2164,6 +2182,8 @@ int MinARTn::new_min_perp_fire(int maxiter)
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
+    
+    //ntimestep = ++update->ntimestep;
 
     if(iter % fire_lanczos_every == 0){
       // g store old h
@@ -2333,6 +2353,8 @@ int MinARTn::new_min_perp_fire(int maxiter)
     eprevious = ecurrent;
     ecurrent = energy_force(1); ++evalf;
     artn_reset_vec();reset_x00();
+
+    
   }
 
 return MAXITER;
@@ -2405,11 +2427,13 @@ void MinARTn::print_info(const int flag)
       if (log_level) fprintf(fp1, "  - Minimizer stop condition  : %s\n",  stopstr);
       fprintf(fp1, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
       fprintf(fp1, "  - Temperature   (eV)        : %.6f\n", temperature);
+      fprintf(fp1, "  - Force two-norm final      : %.6f\n", ddum);
     }
     if (screen){
       if (log_level) fprintf(screen, "  - Minimizer stop condition  : %s\n",  stopstr);
       fprintf(screen, "  - Current (ref) energy (eV) : %.6f\n", ecurrent);
       fprintf(screen, "  - Temperature   (eV)        : %.6f\n", temperature);
+      fprintf(screen, "  - Force two-norm final      : %.6f\n", ddum);
     }
 
   } else if (flag == 2){
@@ -2539,12 +2563,14 @@ void MinARTn::print_info(const int flag)
     if (fp1) {
       fprintf(fp1, "    - Current   energy (eV)     : %.6f\n", ecurrent);
       fprintf(fp1, "    - Reference energy (eV)     : %.6f\n", eref);
+      fprintf(fp1, "    - Force two-norm final      : %.6f\n", ddum);
       if (log_level) fprintf(fp1, "    - Minimizer stop condition  : %s\n",  stopstr);
       if (log_level) fprintf(fp1, "    - # of force evaluations    : %d\n", neval);
     }
     if (screen) {
       fprintf(screen, "    - Current   energy (eV)     : %.6f\n", ecurrent);
       fprintf(screen, "    - Reference energy (eV)     : %.6f\n", eref);
+      fprintf(screen, "    - Force two-norm final      : %.6f\n", ddum);
       if (log_level) fprintf(screen, "    - Minimizer stop condition  : %s\n",  stopstr);
       if (log_level) fprintf(screen, "    - # of force evaluations    : %d\n", neval);
     }
@@ -2590,13 +2616,15 @@ void MinARTn::print_info(const int flag)
   } else if (flag == 51){
     if (fp1){
       fprintf(fp1, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(fp1, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      fprintf(fp1, "    - Current  min  energy (eV) : %.6f\n", ecurrent);
+      fprintf(fp1, "    - Force two-norm final      : %.6f\n", ddum);
       if (log_level)fprintf(fp1, "      - Reference     energy (eV) : %.6f\n", eref);
       if (log_level) fprintf(fp1, "      - Minimizer stop condition  : %s\n",  stopstr);
     }
     if (screen){
       fprintf(screen, "    Relaxed to a nearby minimum to sad-%d\n", sad_id);
-      fprintf(screen, "      - Current  min  energy (eV) : %.6f\n", ecurrent);
+      fprintf(screen, "    - Current  min  energy (eV) : %.6f\n", ecurrent);
+      fprintf(screen, "    - Force two-norm final      : %.6f\n", ddum);
       if (log_level) fprintf(screen, "      - Reference     energy (eV) : %.6f\n", eref);
       if (log_level) fprintf(screen, "      - Minimizer stop condition  : %s\n",  stopstr);
     }
@@ -2698,7 +2726,7 @@ int MinARTn::SD_min_converge(int maxiter, const int flag)
     for (i = 0; i < nextra_global; i++) hextra[i] = fextra[i];
 
   for (int iter = 0; iter < maxiter; iter++) {
-    ntimestep = ++update->ntimestep;
+    //ntimestep = ++update->ntimestep;
     niter++;
 
     // line minimization along h from current position x
@@ -2737,6 +2765,13 @@ int MinARTn::SD_min_converge(int maxiter, const int flag)
       for (i = 0; i < nextra_global; i++) hextra[i] = fextra[i];
     if (flag == 2) reset_coords();
     else if (flag == 1) reset_x00();
+
+    // output for thermo, dump, restart files
+    if (output->next == ntimestep) {
+      timer->stamp();
+      output->write(ntimestep);
+      timer->stamp(TIME_OUTPUT);
+    }
   }
   return MAXITER;
    
@@ -2757,6 +2792,7 @@ int MinARTn::min_converge_fire(int maxiter){
   double scale1, scale2;
   double alpha;
   int last_negative = 0;
+  int ntimestep;
   neval = 0;
 
   double force_thr2 = force_th_perp_sad*force_th_perp_sad;
@@ -2766,6 +2802,7 @@ int MinARTn::min_converge_fire(int maxiter){
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
+    //ntimestep = ++update->ntimestep;
     vdotf = 0.;
     vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fvec[i];
@@ -2858,6 +2895,12 @@ int MinARTn::min_converge_fire(int maxiter){
     if (update->ftol > 0.0) {
       double fdotf = fnorm_sqr();
       if (fdotf < update->ftol*update->ftol) return FTOL;
+    }
+
+    if (output->next == ntimestep) {
+      timer->stamp();
+      output->write(ntimestep);
+      timer->stamp(TIME_OUTPUT);
     }
 
 
