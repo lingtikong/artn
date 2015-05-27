@@ -2802,7 +2802,7 @@ int MinARTn::min_converge_fire(int maxiter){
 
   alpha = alpha_start;
   for (int iter = 0; iter < maxiter; ++iter){
-    //ntimestep = ++update->ntimestep;
+    ntimestep = ++update->ntimestep;
     vdotf = 0.;
     vvec = atom->v[0];
     for (int i = 0; i < nvec; ++i) vdotf += vvec[i] * fvec[i];
