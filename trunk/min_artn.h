@@ -56,6 +56,7 @@ private:
   Compute *pressure;
 
   int me, np;
+  //int ntimestep;
   int iatom;               // index of current atom to find saddlepoint when using events_per_atom
   bigint evalf;
   bool flag_egvec;
