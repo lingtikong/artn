@@ -1774,6 +1774,7 @@ void MinARTn::random_kick()
   if (me == 0) print_info(19);
 
   // now normalize and apply the kick to the selected atom(s)
+  norm = 0.;
   for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
 
