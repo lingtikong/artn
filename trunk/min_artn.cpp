@@ -532,7 +532,9 @@ void MinARTn::set_defaults()
   force_th_perp_h  = 0.5;
   eigen_th_well    = -0.01;
   flag_dump_direction = 0;
-  dump_direction_random_factor = 0.0;
+  flag_deformation_gradient = 0;
+  for (int i = 0; i < 9; ++i) deformation_gradient[i] = 0.0;
+  random_kick_factor = 0.0;
 
   // activation, converge to saddle
   max_activat_iter  = 100;
@@ -805,8 +807,19 @@ void MinARTn::read_control()
       } else if (strcmp(token1, "flag_dump_direction") == 0){
 	flag_dump_direction = force->inumeric(FLERR, token2);
 
+	// here to parase this command just for historic reason.
       } else if (strcmp(token1, "dump_direction_random_factor") == 0){
-	dump_direction_random_factor = force->numeric(FLERR, token2);
+	random_kick_factor = force->numeric(FLERR, token2);
+
+      } else if (strcmp(token1, "random_kick_factor") == 0){
+	random_kick_factor = force->numeric(FLERR, token2);
+
+      } else if (strcmp(token1, "deformation_gradient") == 0){
+	flag_deformation_gradient = 1;
+	for (int i =0; i < 9; ++i){
+	  deformation_gradient[i] = force->numeric(FLERR, token2);
+          token2 = strtok(NULL," \t\n\r\f");
+	}
 
       } else {
         sprintf(str, "Unknown control parameter for ARTn: %s", token1);
@@ -815,6 +828,16 @@ void MinARTn::read_control()
 
     }
     fclose(fp);
+  }
+
+  if (flag_deformation_gradient && cluster_radius <= ZERO ) {
+    sprintf(str, "Cluster_radius should be a positive value when using deformation gradient.");
+    error->all(FLERR, str);
+  }
+
+  if (flag_deformation_gradient && flag_dump_direction){
+    sprintf(str, "Deformation gradient and dump_direction should not be used at the same time.");
+    error->all(FLERR, str);
   }
 
   // set default output file names
@@ -892,7 +915,7 @@ void MinARTn::read_control()
     fprintf(fp1, "\n# activation, harmonic well escape\n");
     fprintf(fp1, "group_4_activat     %-18s  # %s\n", groupname, "The lammps group ID of the atoms that can be activated");
     fprintf(fp1, "flag_dump_direction %-18d  # %s\n", flag_dump_direction, "Use dump direction file as the initial kick direction");
-    fprintf(fp1, "dump_direction_random_factor %-18g  # %s\n", dump_direction_random_factor, "Norm of the initial displacement (activation)");
+    fprintf(fp1, "random_kick_factor %-18g  # %s\n", random_kick_factor, "Norm of the initial displacement (activation)");
     fprintf(fp1, "cluster_radius      %-18g  # %s\n", cluster_radius, "The radius of the cluster that will be activated");
     fprintf(fp1, "init_step_size      %-18g  # %s\n", init_step_size, "Norm of the initial displacement (activation)");
     fprintf(fp1, "basin_factor        %-18g  # %s\n", basin_factor, "Factor multiplying Increment_Size for leaving the basin");
@@ -1686,6 +1709,14 @@ void MinARTn::random_kick()
       domain->minimum_image(dx, dy, dz);
       double r2 = dx*dx + dy*dy + dz*dz;
       if (r2 <= rcut2){
+        if (flag_deformation_gradient){
+          double tmpx = deformation_gradient[0] * dx + deformation_gradient[1] * dy + deformation_gradient[2] * dz;
+          double tmpy = deformation_gradient[3] * dx + deformation_gradient[4] * dy + deformation_gradient[5] * dz;
+          double tmpz = deformation_gradient[6] * dx + deformation_gradient[7] * dy + deformation_gradient[8] * dz;
+	  tmpdelpos[3*i] = tmpx - dx;
+	  tmpdelpos[3*i+1] = tmpy - dy;
+	  tmpdelpos[3*i+2] = tmpz - dz;
+        }
         int n = 3*i;
         delpos[n  ] = 0.5 - random->uniform();
         delpos[n+1] = 0.5 - random->uniform();
@@ -1696,9 +1727,24 @@ void MinARTn::random_kick()
       //}
     }
   }
-  if (flag_dump_direction){
+  double norm = 0., normall;
+  double norm2 = 0., normall2;
+  for (int i = 0; i < nvec; ++i){
+    norm += delpos[i] * delpos[i];
+    norm2 += tmpdelpos[i] * tmpdelpos[i];
+  }
+  MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
+  MPI_Allreduce(&norm2,&normall2,1,MPI_DOUBLE,MPI_SUM,world);
+  double norm_i = 1./sqrt(normall);
+  double norm2_i = 1./sqrt(normall2);
+  for (int i = 0; i < nvec; ++i){
+    delpos[i] = delpos[i] * norm_i;
+    tmpdelpos[i] = tmpdelpos[i] * norm2_i;
+  }
+
+  if (flag_dump_direction || flag_deformation_gradient){
     for (int i = 0; i < 3*nlocal; ++i){
-      delpos[i] = delpos[i] * dump_direction_random_factor + ( 1 - dump_direction_random_factor) * tmpdelpos[i];
+      delpos[i] = delpos[i] * random_kick_factor + ( 1 - random_kick_factor) * tmpdelpos[i];
     }
   }
 
@@ -1728,11 +1774,10 @@ void MinARTn::random_kick()
   if (me == 0) print_info(19);
 
   // now normalize and apply the kick to the selected atom(s)
-  double norm = 0., normall;
   for (int i = 0; i < nvec; ++i) norm += delpos[i] * delpos[i];
   MPI_Allreduce(&norm,&normall,1,MPI_DOUBLE,MPI_SUM,world);
 
-  double norm_i = 1./sqrt(normall);
+  norm_i = 1./sqrt(normall);
   for (int i = 0; i < nvec; ++i){
     h[i] = delpos[i] * norm_i;
     xvec[i] += MIN(dmax, MAX(-dmax, init_step_size * h[i]));
