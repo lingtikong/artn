@@ -1868,7 +1868,7 @@ int MinARTn::min_converge(int maxiter, const int flag)
     if (output->next == ntimestep) {
       timer->stamp();
       output->write(ntimestep);
-      timer->stamp(TIME_OUTPUT);
+      timer->stamp(Timer::OUTPUT);
     }
   }
 
@@ -2816,7 +2816,7 @@ int MinARTn::SD_min_converge(int maxiter, const int flag)
     if (output->next == ntimestep) {
       timer->stamp();
       output->write(ntimestep);
-      timer->stamp(TIME_OUTPUT);
+      timer->stamp(Timer::OUTPUT);
     }
   }
   return MAXITER;
@@ -2946,7 +2946,7 @@ int MinARTn::min_converge_fire(int maxiter){
     if (output->next == ntimestep) {
       timer->stamp();
       output->write(ntimestep);
-      timer->stamp(TIME_OUTPUT);
+      timer->stamp(Timer::OUTPUT);
     }
 
 
